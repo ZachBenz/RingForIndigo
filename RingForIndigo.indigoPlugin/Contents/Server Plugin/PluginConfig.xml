@@ -7,10 +7,10 @@
 	<Field id="readonlyDeviceDetails" type="label" fontSize="small" fontColor="darkgray">
 		<Label>The (unofficial) Ring.com API doesn't currently support two-factor authentication. As an alternative, you can add an authorized secondary account for Indigo to connect with, allowing you to enable two-factor authentication on your primary account.</Label>
 	</Field>
-	<Field type="textfield" id="Username" tooltip="Ring.com Username" visibleBindingValue="true">
+	<Field type="textfield" id="username" tooltip="Ring.com Username" visibleBindingValue="true">
 		<Label>Ring.com Username:</Label>
 	</Field>
-	<Field type="textfield" id="Password" secure="true" tooltip="Ring.com Password" visibleBindingValue="true">
+	<Field type="textfield" id="password" secure="true" tooltip="Ring.com Password" visibleBindingValue="true">
 		<Label>Ring.com Password:</Label>
 	</Field>
 	<Field id="simpleSeparator5" type="separator"/>

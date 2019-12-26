@@ -25,12 +25,24 @@
 	<Device type="sensor" id="doorbell">
 		<Name>Doorbell</Name>
 		<ConfigUI>
-			<!-- Enable standard features of a Sensor type Indigo Device -->
-			<Field id="SupportsOnState" type="checkbox" hidden="true" defaultValue="false">
-				<Label>HIDDEN, SHOULD NOT DISPLAY</Label>
+			<!-- TODO: Make this actually work like a security device motion sensor - see how DSC plugin does it -->
+			<!--  Enable standard features of a Sensor type Indigo Device -->
+			<Field id="SupportsOnState" type="checkbox" defaultValue="false" hidden="true">
+				<Label>HIDDEN, SHOULD NOT DISPLAY; Show ON/OFF state</Label>
 			</Field>
-			<Field id="SupportsSensorValue" type="checkbox" hidden="true" defaultValue="true">
-				<Label>HIDDEN, SHOULD NOT DISPLAY</Label>
+			<Field id="SupportsSensorValue" type="checkbox" defaultValue="true" hidden="true">
+				<Label>HIDDEN, SHOULD NOT DISPLAY; Show sensor value state</Label>
+			</Field>
+			<Field id="SupportsStatusRequest" type="checkbox" defaultValue="true" hidden="true">
+				<Label>HIDDEN, SHOULD NOT DISPLAY; Enable status request / refresh button:</Label>
+			</Field>
+			<Field id="AllowOnStateChange" type="checkbox" defaultValue="false" hidden="true" >
+				<Label>HIDDEN, SHOULD NOT DISPLAY; Enable controls to override on/off state</Label>
+			</Field>
+			<!-- Hidden because not yet implemented by Indigo, but might have UI to edit
+			sensor values at some point. -->
+			<Field id="AllowSensorValueChange" type="checkbox" defaultValue="false" hidden="true">
+				<Label>HIDDEN, SHOULD NOT DISPLAY; Enable controls to override sensor value state</Label>
 			</Field>
 
 			<Field id="doorbellDropDownListSelection" type="menu">
