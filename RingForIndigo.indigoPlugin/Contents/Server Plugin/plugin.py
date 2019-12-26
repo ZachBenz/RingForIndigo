@@ -10,6 +10,8 @@ import os
 import sys
 import time
 import requests
+import datetime
+import pytz
 from ring_doorbell import Ring
 
 # Note the "indigo" module is automatically imported and made available inside
@@ -23,20 +25,25 @@ class Plugin(indigo.PluginBase):
 		super(Plugin, self).__init__(pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
 		self.debug = pluginPrefs.get(u"printDebugInEventLog", False)
 		self.ring = None
-		# TODO: Initialize some lookup tables by Indigo device id?
+		self.utc = pytz.UTC
+		# TODO: Initialize some lookup tables mapping Indigo devices to Ring devices?
+
 
 	########################################
 	def __del__(self):
 		indigo.PluginBase.__del__(self)
 
+
 	########################################
 	def startup(self):
 		self.debugLog(u"Startup called")
+
 
 	########################################
 	def shutdown(self):
 		# Cleanup handled in runConcurrentThread's self.stopThread exception handling
 		self.debugLog(u"Shutdown called")
+
 
 	########################################
 	def makeConnectionToRing(self, username, password):
@@ -71,14 +78,17 @@ class Plugin(indigo.PluginBase):
 			# Connection failed
 			self.debugLog(u"Connection to Ring.com API failed")
 
+
 	########################################
 	def closeConnectionToRing(self):
 		if ((self.ring is not None) and (self.ring.is_connected is True)):
 			self.ring.session.close()
 
+
 	########################################
 	def isConnected(self):
 		return ((self.ring is not None) and (self.ring.is_connected is True))
+
 
 	########################################
 	# If runConcurrentThread() is defined, then a new thread is automatically created
@@ -100,27 +110,69 @@ class Plugin(indigo.PluginBase):
 				if (self.isConnected() is True):
 					self.debugLog(u"Getting updates from Ring.com API")
 
-					# Update device mappings
-					for ringDevice in list(self.ring.stickup_cams + self.ring.chimes + self.ring.doorbells):
-						ringDevice.update()
-						# TODO add in actual device and event updating...
-						# TODO update both pluginProps (for device settings) and state (current), as appropriate
-						# self.debugLog(u' ')
-						# self.debugLog(u'Name:       %s' % ringDevice.name)
-						# self.debugLog(u'Account ID: %s' % ringDevice.account_id)
-						# self.debugLog(u'Address:    %s' % ringDevice.address)
-						# self.debugLog(u'Family:     %s' % ringDevice.family)
-						# self.debugLog(u'ID:         %s' % ringDevice.id)
-						# self.debugLog(u'Timezone:   %s' % ringDevice.timezone)
-						# self.debugLog(u'Wifi Name:  %s' % ringDevice.wifi_name)
-						# self.debugLog(u'Wifi RSSI:  %s' % ringDevice.wifi_signal_strength)
+					# Doorbells
+					for ringDevice in self.ring.doorbells:
+						# Check to see if this ringDevice is mapped to an Indigo device
+						indigoDevice = self.getExistingIndigoDeviceMapping(ringDevice, "doorbell")
+						if (indigoDevice is not None):
+							# Get latest state and events for Ring device
+							ringDevice.update()
+							# TODO is there any reason to worry about the stale data in pluginProps?  Just gets updated when device list built
+							indigoDevice.updateStateOnServer("ringDeviceName", ringDevice.name)
+							indigoDevice.updateStateOnServer("ringDeviceId", ringDevice.account_id)
+							indigoDevice.updateStateOnServer("ringDeviceLocation", ringDevice.address)
+							indigoDevice.updateStateOnServer("ringDeviceModel", ringDevice.model)
+							indigoDevice.updateStateOnServer("ringDeviceFamily", ringDevice.family)
+							indigoDevice.updateStateOnServer("ringDeviceFirmware", ringDevice.firmware)
+							indigoDevice.updateStateOnServer("ringDeviceBatteryLevel", ringDevice.battery_life)
+							indigoDevice.updateStateOnServer("ringDeviceVolume", ringDevice.volume)
+							indigoDevice.updateStateOnServer("ringDeviceTimezone", ringDevice.timezone)
+							indigoDevice.updateStateOnServer("ringDeviceWifiMACAddress", ringDevice.id)
+							indigoDevice.updateStateOnServer("ringDeviceWifiNetwork", ringDevice.wifi_name)
+							indigoDevice.updateStateOnServer("ringDeviceWifiSignalStrength", ringDevice.wifi_signal_strength)
+							# self.debugLog(u"%s" % indigoDevice)
+
+							for event in ringDevice.history(limit=30):
+								indigoDeviceLastEventTime = self.utc.localize(datetime.datetime.strptime(indigoDevice.states["lastEventTime"], '%Y-%m-%d %H:%M:%S %Z'))
+								ringDeviceEventTime = event["created_at"]
+								isNewEvent =  indigoDeviceLastEventTime < ringDeviceEventTime
+								if isNewEvent:
+									self.debugLog("Processing an event for %s" % indigoDevice.name)
+									# try:
+									# 	self.updateStateOnServer(dev, "lastEventId", str(event.id))
+									# except:
+									# 	self.de(dev, "lastEventId")
+									# try:
+									# 	self.updateStateOnServer(dev, "lastEvent", event.kind)
+									# except:
+									# 	self.de(dev, "lastEvent")
+									# try:
+									# 	self.updateStateOnServer(dev, "lastEventTime", str(event.now))
+									# except:
+									# 	self.de(dev, "lastEventTime")
+									# try:
+									# 	self.updateStateOnServer(dev, "lastAnswered", event.answered)
+									# except:
+									# 	self.de(dev, "lastAnswered")
+									#
+									# if (event.kind == "motion"):
+									# 	try:
+									# 		self.updateStateOnServer(dev, "lastMotionTime", str(event.now))
+									# 	except:
+									# 		self.de(dev, "lastMotionTime")
+									# else:
+									# 	try:
+									# 		self.updateStateOnServer(dev, "lastButtonPressTime", str(event.now))
+									# 	except:
+									# 		self.de(dev, "lastButtonPressTime")
 
 				# TODO Change to use a user specified update frequency
-				self.sleep(120) # in seconds
+				self.sleep(20) # in seconds
 		except self.StopThread:
 			# Close connection to Ring API
 			self.closeConnectionToRing()
 			pass
+
 
 	########################################
 	# Actions defined in MenuItems.xml:
@@ -128,9 +180,15 @@ class Plugin(indigo.PluginBase):
 	# def refreshAvailableRingDevices(self):
 	# 	return
 
+
 	# ########################################
 	def validateDeviceConfigUi(self, valuesDict, typeId, devId):
-		return (True, valuesDict)
+		if (valuesDict["doorbellDropDownListSelection"] == ""):
+			errorDict = indigo.Dict()
+			errorDict["doorbellDropDownListSelection"] = "You must pick an available Ring device from the dropdown list"
+			return(False, valuesDict, errorDict)
+		return True
+
 
 	########################################
 	def validatePrefsConfigUi(self, valuesDict):
@@ -142,29 +200,39 @@ class Plugin(indigo.PluginBase):
 
 		# PluginPrefs will be updated AFTER we exit this method if we say validation was good
 		self.debugLog(u"Validated plugin configuration changes")
-		return (True, valuesDict)
+		return True
+
 
 	########################################
-	def deviceStartComm(self, dev):
+	def deviceStartComm(self, indigoDevice):
 		# Called when communication with the hardware should be started.
 		# Initialize device state
-		dev.updateStateOnServer("ringDeviceId", dev.address)
+		indigoDevice.updateStateOnServer("ringDeviceId", indigoDevice.address)
 
 		# TODO - data in pluginProps is stale - its from when device was configged, not up to date
 		# Instead, should probably be using latest data from Ring API...  only thing that should
-		dev.updateStateOnServer("ringDeviceName", dev.pluginProps.get("selectedRingDeviceName", ""))
-		dev.updateStateOnServer("ringDeviceLocation", dev.pluginProps.get("selectedRingDeviceLocation", ""))
-		dev.updateStateOnServer("ringDeviceModel", dev.pluginProps.get("selectedRingDeviceModel", ""))
-		dev.updateStateOnServer("ringDeviceFamily", dev.pluginProps.get("selectedRingDeviceFamily", ""))
-		dev.updateStateOnServer("ringDeviceFirmware", dev.pluginProps.get("selectedRingDeviceFirmware", ""))
-		dev.updateStateOnServer("ringDeviceBatteryLevel", dev.pluginProps.get("selectedRingDeviceBatteryLevel", ""))
-		dev.updateStateOnServer("ringDeviceVolume", dev.pluginProps.get("selectedRingDeviceVolume", ""))
-		dev.updateStateOnServer("ringDeviceTimezone", dev.pluginProps.get("selectedRingDeviceTimezone", ""))
-		dev.updateStateOnServer("ringDeviceWifiMACAddress", dev.pluginProps.get("selectedRingDeviceWifiMACAddress", ""))
-		dev.updateStateOnServer("ringDeviceWifiNetwork", dev.pluginProps.get("selectedRingDeviceWifiNetwork", ""))
-		dev.updateStateOnServer("ringDeviceWifiSignalStrength", dev.pluginProps.get("selectedRingDeviceWifiSignalStrength", ""))
+		indigoDevice.updateStateOnServer("ringDeviceName", indigoDevice.pluginProps.get("selectedRingDeviceName", ""))
+		indigoDevice.updateStateOnServer("ringDeviceLocation", indigoDevice.pluginProps.get("selectedRingDeviceLocation", ""))
+		indigoDevice.updateStateOnServer("ringDeviceModel", indigoDevice.pluginProps.get("selectedRingDeviceModel", ""))
+		indigoDevice.updateStateOnServer("ringDeviceFamily", indigoDevice.pluginProps.get("selectedRingDeviceFamily", ""))
+		indigoDevice.updateStateOnServer("ringDeviceFirmware", indigoDevice.pluginProps.get("selectedRingDeviceFirmware", ""))
+		indigoDevice.updateStateOnServer("ringDeviceBatteryLevel", indigoDevice.pluginProps.get("selectedRingDeviceBatteryLevel", ""))
+		indigoDevice.updateStateOnServer("ringDeviceVolume", indigoDevice.pluginProps.get("selectedRingDeviceVolume", ""))
+		indigoDevice.updateStateOnServer("ringDeviceTimezone", indigoDevice.pluginProps.get("selectedRingDeviceTimezone", ""))
+		indigoDevice.updateStateOnServer("ringDeviceWifiMACAddress", indigoDevice.pluginProps.get("selectedRingDeviceWifiMACAddress", ""))
+		indigoDevice.updateStateOnServer("ringDeviceWifiNetwork", indigoDevice.pluginProps.get("selectedRingDeviceWifiNetwork", ""))
+		indigoDevice.updateStateOnServer("ringDeviceWifiSignalStrength", indigoDevice.pluginProps.get("selectedRingDeviceWifiSignalStrength", ""))
 
-		self.debugLog(u"Device:\n%s" % dev)
+		# Initialize lastEventTime to date in distant past
+		distantPast = datetime.datetime(
+			year=1900,
+			month=01,
+			day=01,
+			hour=0,
+			minute=0,
+			second=0,
+			tzinfo=pytz.UTC)
+		indigoDevice.updateStateOnServer("lastEventTime", datetime.datetime.strftime(distantPast, '%Y-%m-%d %H:%M:%S %Z'))
 
 	########################################
 	# Plugin Actions object callbacks (pluginAction is an Indigo plugin action instance)
@@ -173,29 +241,28 @@ class Plugin(indigo.PluginBase):
 	# 	self.debugLog(u"downloadVideo action called:\n" + str(pluginAction))
 	# 	return
 
+
 	########################################
 	# Methods and callbacks defined in Devices.xml:
 	####################
-	def unmappedRingDoorbellDevices(self, filter, valuesDict, typeId, targetId):
+	def currentMappingAndUnmappedRingDevices(self, filter, valuesDict, typeId, targetId):
+		# TODO: change to make use of filter to pick device type to iterate over
 		self.debugLog(u"Finding Ring doorbell devices that are not yet mapped to Indigo devices")
-		unmappedRingDoorbellDevices = []
+		currentAndUnmappedRingDevices = []
 
 		if self.isConnected():
-			for ringDoorbellDevice in self.ring.doorbells:
-				self.debugLog(u"Name: %s" % ringDoorbellDevice.name)
-				# See if there is already a mapping for this doorbell
+			for ringDevice in self.ring.doorbells:
+				# Get most up to date data for the Ring device
+				ringDevice.update()
+				
+				# See if there is already a mapping to an Indigo device for this Ring device
+				indigoDevice = self.getExistingIndigoDeviceMapping(ringDevice, "doorbell")
+				if ((indigoDevice is None) or (str(valuesDict["address"]) == indigoDevice.address)):
+					# Add to the list if no existing mapping, or if mapping is to the device we're currently configuring
+					currentAndUnmappedRingDevices.append((ringDevice.account_id, ringDevice.name))
 
-				# TODO: Inefficient to iterate over the indigo devices every time; consider a more efficient mapping
-				foundMappedDevice = False
-				for indigoDevice in indigo.devices.iter("self.doorbell"):
-					if (indigoDevice.states["ringDeviceId"] == str(ringDoorbellDevice.account_id)):
-						foundMappedDevice = True
-						break
+		return currentAndUnmappedRingDevices
 
-				if (foundMappedDevice is False):
-					unmappedRingDoorbellDevices.append((ringDoorbellDevice.account_id, ringDoorbellDevice.name))
-
-		return unmappedRingDoorbellDevices
 
 	########################################
 	def ringDoorbellDeviceSelectionChange(self, valuesDict, typeId, devId):
@@ -204,7 +271,7 @@ class Plugin(indigo.PluginBase):
 		# TODO: Inefficient to iterate over the Ring devices every time; consider a more efficient mapping
 		mappedRingDevice = None
 		for ringDoorbellDevice in self.ring.doorbells:
-			if (str(ringDoorbellDevice.account_id) == valuesDict["selectedRingDoorbellDevice"]):
+			if (str(ringDoorbellDevice.account_id) == valuesDict["doorbellDropDownListSelection"]):
 				mappedRingDevice = ringDoorbellDevice
 				break
 
@@ -225,7 +292,27 @@ class Plugin(indigo.PluginBase):
 
 		return valuesDict
 
+
 	########################################
-	# def updateRingDoorbellDeviceMapping(self, valuesDict, typeId, devId):
-	# 	self.debugLog(u"Updating mapping from Ring doorbell device to Indigo device")
-	# 	return
+	def getExistingIndigoDeviceMapping(self, ringDevice, indigoDeviceTypeId):
+		# TODO: Inefficient to iterate over the indigo devices every time; consider a more efficient mapping
+		mappedIndigoDevice = None
+		if (indigoDeviceTypeId == "doorbell"):
+			for indigoDevice in indigo.devices.iter("self.doorbell"):
+				if (indigoDevice.address == str(ringDevice.account_id)):
+					mappedIndigoDevice = indigoDevice
+					break
+		return mappedIndigoDevice
+
+
+	########################################
+	def debugPrintRingDevice(self, ringDevice):
+		self.debugLog(u' ')
+		self.debugLog(u'Name:       %s' % ringDevice.name)
+		self.debugLog(u'Account ID: %s' % ringDevice.account_id)
+		self.debugLog(u'Address:    %s' % ringDevice.address)
+		self.debugLog(u'Family:     %s' % ringDevice.family)
+		self.debugLog(u'ID:         %s' % ringDevice.id)
+		self.debugLog(u'Timezone:   %s' % ringDevice.timezone)
+		self.debugLog(u'Wifi Name:  %s' % ringDevice.wifi_name)
+		self.debugLog(u'Wifi RSSI:  %s' % ringDevice.wifi_signal_strength)

@@ -33,12 +33,14 @@
 				<Label>HIDDEN, SHOULD NOT DISPLAY</Label>
 			</Field>
 
-			<Field id="selectedRingDoorbellDevice" type="menu">
+			<Field id="doorbellDropDownListSelection" type="menu">
 				<Label>Ring.com Doorbell Device:</Label>
-				<List class="self" filter="" method="unmappedRingDoorbellDevices"/>
+				<List class="self" filter="doorbell" method="currentMappingAndUnmappedRingDevices"/>
 				<CallbackMethod>ringDoorbellDeviceSelectionChange</CallbackMethod>
 			</Field>
+
 			<Field id="separator1" type="separator"/>
+
 			<Field id="readonlyDeviceDetails" type="label" fontSize="small" fontColor="darkgray">
         		<Label>Details from Ring.com for selected Ring device:</Label>
     		</Field>
@@ -140,6 +142,7 @@
 				<TriggerLabel>Ring.com Device Wifi Signal Strength</TriggerLabel>
 				<ControlPageLabel>Ring.com Device Wifi Signal Strength</ControlPageLabel>
 			</State>
+
 			<State id="lastEventId">
 				<ValueType>String</ValueType>
 				<TriggerLabel>Ring.com Event Id</TriggerLabel>
@@ -155,7 +158,7 @@
 				<TriggerLabel>Ring.com Event Time</TriggerLabel>
 				<ControlPageLabel>Ring.com Event Time</ControlPageLabel>
 			</State>
-			<State id="waslastEventAnswered">
+			<State id="wasLastEventAnswered">
 				<ValueType>Boolean</ValueType>
 				<TriggerLabel>Was the Last Event Answered in Ring App</TriggerLabel>
 				<ControlPageLabel>Was the Last Event Answered in Ring App</ControlPageLabel>
