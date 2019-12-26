@@ -130,13 +130,6 @@ class Plugin(indigo.PluginBase):
 
 	# ########################################
 	def validateDeviceConfigUi(self, valuesDict, typeId, devId):
-		# TODO: Perhaps clear out dynamic stuff in pluginProps for device (only need to display, then propogate to state)
-		# Or not... since we need it to populate the config UI...
-	# 	if typeId == "doorbell":
-	# 		if "selectedRingDeviceName" in valuesDict:
-	# 			valuesDict["selectedRingDeviceName"] = ""
-	# 		if "selectedRingDeviceLocation" in valuesDict:
-	# 			valuesDict["selectedRingDeviceLocation"] = ""
 		return (True, valuesDict)
 
 	########################################
