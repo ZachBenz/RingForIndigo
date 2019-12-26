@@ -1,0 +1,186 @@
+<?xml version="1.0"?>
+<!-- If your plugin defines device types, you can define them here.
+
+	 Devices must specify their type (via the type attribute):
+
+		relay (ON/OFF/STATUS)
+		dimmer (ON/OFF/DIM/BRIGHTEN/SET BRIGHTNESS/STATUS)
+		speedcontrol (ON/OFF/SET SPEED LEVEL/SET SPEED INDEX/INCREASE/DECREASE/STATUS)
+		sensor (ON/OFF/STATUS)
+		thermostat
+		sprinkler
+		custom
+
+	 The first six inherit states, actions and events from Indigo. You can
+	 also specify your own custom actions and additional states, if needed.
+	 
+	 Devices must also specify a unique typeID - so, for instance, if you define
+	 2 relay type devices then your plugin can distinguish between the two by
+	 the typeID.
+-->
+
+<Devices>
+	<!-- Doorbell - configured as a sensor so that we can use ON/OFF state for detected motion like a motion sensor
+	-->
+	<Device type="sensor" id="doorbell">
+		<Name>Doorbell</Name>
+		<ConfigUI>
+			<!-- Enable standard features of a Sensor type Indigo Device -->
+			<Field id="SupportsOnState" type="checkbox" hidden="true" defaultValue="false">
+				<Label>HIDDEN, SHOULD NOT DISPLAY</Label>
+			</Field>
+			<Field id="SupportsSensorValue" type="checkbox" hidden="true" defaultValue="true">
+				<Label>HIDDEN, SHOULD NOT DISPLAY</Label>
+			</Field>
+
+			<Field id="selectedRingDoorbellDevice" type="menu">
+				<Label>Ring.com Doorbell Device:</Label>
+				<List class="self" filter="" method="unmappedRingDoorbellDevices"/>
+				<CallbackMethod>ringDoorbellDeviceSelectionChange</CallbackMethod>
+			</Field>
+			<Field id="separator1" type="separator"/>
+			<Field id="readonlyDeviceDetails" type="label" fontSize="small" fontColor="darkgray">
+        		<Label>Details from Ring.com for selected Ring device:</Label>
+    		</Field>
+			<Field id="selectedRingDeviceName" type="textfield" readonly="yes" defaultValue="">
+				<Label>Device Name:</Label>
+			</Field>
+			<Field id="selectedRingDeviceId" type="textfield" readonly="yes" defaultValue="">
+				<Label>Device ID:</Label>
+			</Field>
+			<Field id="selectedRingDeviceLocation" type="textfield" readonly="yes" defaultValue="">
+				<Label>Device Location:</Label>
+			</Field>
+			<Field id="selectedRingDeviceModel" type="textfield" readonly="yes" defaultValue="">
+				<Label>Device Model:</Label>
+			</Field>
+			<Field id="selectedRingDeviceFamily" type="textfield" readonly="yes" defaultValue="">
+				<Label>Device Family:</Label>
+			</Field>
+			<Field id="selectedRingDeviceFirmware" type="textfield" readonly="yes" defaultValue="">
+				<Label>Device Firmware:</Label>
+			</Field>
+			<Field id="selectedRingDeviceBatteryLevel" type="textfield" readonly="yes" defaultValue="">
+				<Label>Device Battery Level:</Label>
+			</Field>
+			<Field id="selectedRingDeviceVolume" type="textfield" readonly="yes" defaultValue="">
+				<Label>Device Volume:</Label>
+			</Field>
+			<Field id="selectedRingDeviceTimezone" type="textfield" readonly="yes" defaultValue="">
+				<Label>Device Timezone:</Label>
+			</Field>
+			<Field id="selectedRingDeviceWifiMACAddress" type="textfield" readonly="yes" defaultValue="">
+				<Label>Device Wifi Mac Address:</Label>
+			</Field>
+			<Field id="selectedRingDeviceWifiNetwork" type="textfield" readonly="yes" defaultValue="">
+				<Label>Device Wifi Network:</Label>
+			</Field>
+			<Field id="selectedRingDeviceWifiSignalStrength" type="textfield" readonly="yes" defaultValue="">
+				<Label>Device Wifi Signal Strength:</Label>
+			</Field>
+		</ConfigUI>
+		<States>
+			<State id="ringDeviceName">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Ring.com Name of Device</TriggerLabel>
+				<ControlPageLabel>Ring.com Name of Device</ControlPageLabel>
+			</State>
+			<State id="ringDeviceId">
+				<ValueType>Integer</ValueType>
+				<TriggerLabel>Ring.com Device ID</TriggerLabel>
+				<ControlPageLabel>Ring.com Device ID</ControlPageLabel>
+			</State>
+			<State id="ringDeviceLocation">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Ring.com Device Location</TriggerLabel>
+				<ControlPageLabel>Ring.com Device Location</ControlPageLabel>
+			</State>
+			<State id="ringDeviceModel">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Ring.com Device Model</TriggerLabel>
+				<ControlPageLabel>Ring.com Device Model</ControlPageLabel>
+			</State>
+			<State id="ringDeviceFamily">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Ring.com Device Family</TriggerLabel>
+				<ControlPageLabel>Ring.com Device Family</ControlPageLabel>
+			</State>
+			<State id="ringDeviceFirmware">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Ring.com Device Firmware</TriggerLabel>
+				<ControlPageLabel>Ring.com Device Firmware</ControlPageLabel>
+			</State>
+			<State id="ringDeviceBatteryLevel">
+				<ValueType>Integer</ValueType>
+				<TriggerLabel>Ring.com Device Battery Level</TriggerLabel>
+				<ControlPageLabel>Ring.com Device Battery Level</ControlPageLabel>
+			</State>
+			<State id="ringDeviceVolume">
+				<ValueType>Integer</ValueType>
+				<TriggerLabel>Ring.com Device Volume</TriggerLabel>
+				<ControlPageLabel>Ring.com Device Volume</ControlPageLabel>
+			</State>
+			<State id="ringDeviceTimezone">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Ring.com Device Timezone</TriggerLabel>
+				<ControlPageLabel>Ring.com Device Timezone</ControlPageLabel>
+			</State>
+			<State id="ringDeviceWifiMACAddress">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Ring.com Device MAC Address</TriggerLabel>
+				<ControlPageLabel>Ring.com Device MAC Address</ControlPageLabel>
+			</State>
+			<State id="ringDeviceWifiNetwork">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Ring.com Device Wifi Network</TriggerLabel>
+				<ControlPageLabel>Ring.com Device Wifi Network</ControlPageLabel>
+			</State>
+			<State id="ringDeviceWifiSignalStrength">
+				<ValueType>Integer</ValueType>
+				<TriggerLabel>Ring.com Device Wifi Signal Strength</TriggerLabel>
+				<ControlPageLabel>Ring.com Device Wifi Signal Strength</ControlPageLabel>
+			</State>
+			<State id="lastEventId">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Ring.com Event Id</TriggerLabel>
+				<ControlPageLabel>Ring.com Event Id</ControlPageLabel>
+			</State>
+			<State id="lastEventKind">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Ring.com Event Kind</TriggerLabel>
+				<ControlPageLabel>Ring.com Event Kind</ControlPageLabel>
+			</State>
+			<State id="lastEventTime">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Ring.com Event Time</TriggerLabel>
+				<ControlPageLabel>Ring.com Event Time</ControlPageLabel>
+			</State>
+			<State id="waslastEventAnswered">
+				<ValueType>Boolean</ValueType>
+				<TriggerLabel>Was the Last Event Answered in Ring App</TriggerLabel>
+				<ControlPageLabel>Was the Last Event Answered in Ring App</ControlPageLabel>
+			</State>
+			<State id="lastMotionTime">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Last Motion Time</TriggerLabel>
+				<ControlPageLabel>Last Motion Time</ControlPageLabel>
+			</State>
+			<State id="lastDoorbellPressTime">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Last Doorbell Press Time</TriggerLabel>
+				<ControlPageLabel>Last Doorbell Press Time</ControlPageLabel>
+			</State>
+		</States>
+		<UiDisplayStateId>ringDeviceWifiSignalStrength</UiDisplayStateId>
+	</Device>
+
+	<!-- Cam With Lights (special case of Ring Stickup Cam family of devices that has as a siren and an on/off light
+	- e.g. the Spotlight Cam and the Floodlight Cam)
+	-->
+
+	<!-- Basic Cam - (Basic Stickup Cam - no light or siren)
+	-->
+
+	<!-- Chime
+	-->
+</Devices>

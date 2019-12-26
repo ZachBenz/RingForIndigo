@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<PluginConfig>
+	<!--	TODO: Still figuring out how much a secondary account can/can't do... seems like no chimes, at the least...
+	or perhaps has to do with the User-Agent used to connect?  Hard to say
+	Might need to add to label: "Note that secondary accounts cannot access Ring Chime devices."
+	-->
+	<Field id="readonlyDeviceDetails" type="label" fontSize="small" fontColor="darkgray">
+		<Label>The (unofficial) Ring.com API doesn't currently support two-factor authentication. As an alternative, you can add an authorized secondary account for Indigo to connect with, allowing you to enable two-factor authentication on your primary account.</Label>
+	</Field>
+	<Field type="textfield" id="Username" tooltip="Ring.com Username" visibleBindingValue="true">
+		<Label>Ring.com Username:</Label>
+	</Field>
+	<Field type="textfield" id="Password" secure="true" tooltip="Ring.com Password" visibleBindingValue="true">
+		<Label>Ring.com Password:</Label>
+	</Field>
+	<Field id="simpleSeparator5" type="separator"/>
+	<Field type="checkbox" id="printDebugInEventLog"
+		tooltip="Display detailed debugging messages in the Indigo Event Log">
+		<Label>Print plugin's debug messages to Indigo Event Log:</Label>
+	</Field>
+</PluginConfig>
