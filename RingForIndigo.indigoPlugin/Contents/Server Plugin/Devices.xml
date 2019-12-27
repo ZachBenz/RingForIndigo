@@ -25,15 +25,13 @@
 	<Device type="sensor" id="doorbell">
 		<Name>Doorbell</Name>
 		<ConfigUI>
-			<!-- TODO: Make this actually work like a security device motion sensor - see how DSC plugin does it -->
-			<!--  Enable standard features of a Sensor type Indigo Device -->
-			<Field id="SupportsOnState" type="checkbox" defaultValue="false" hidden="true">
+			<Field id="SupportsOnState" type="checkbox" defaultValue="true" hidden="true">
 				<Label>HIDDEN, SHOULD NOT DISPLAY; Show ON/OFF state</Label>
 			</Field>
-			<Field id="SupportsSensorValue" type="checkbox" defaultValue="true" hidden="true">
+			<Field id="SupportsSensorValue" type="checkbox" defaultValue="false" hidden="true">
 				<Label>HIDDEN, SHOULD NOT DISPLAY; Show sensor value state</Label>
 			</Field>
-			<Field id="SupportsStatusRequest" type="checkbox" defaultValue="true" hidden="true">
+			<Field id="SupportsStatusRequest" type="checkbox" defaultValue="false" hidden="true">
 				<Label>HIDDEN, SHOULD NOT DISPLAY; Enable status request / refresh button:</Label>
 			</Field>
 			<Field id="AllowOnStateChange" type="checkbox" defaultValue="false" hidden="true" >
@@ -196,6 +194,6 @@
 	<!-- Basic Cam - (Basic Stickup Cam - no light or siren)
 	-->
 
-	<!-- Chime
+	<!-- Chime - not available anymore through Ring.com API as of December 2019?
 	-->
 </Devices>

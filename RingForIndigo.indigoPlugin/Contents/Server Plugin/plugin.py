@@ -110,7 +110,11 @@ class Plugin(indigo.PluginBase):
 				if (self.isConnected() is True):
 					self.debugLog(u"Getting updates from Ring.com API")
 
-					# TODO: go through and clear motion sensed on all devices each update cycle
+					# Go through and clear motion sensed on all devices each update cycle
+					# TODO: Consider having a different update frequency for clearing motion sensed state
+					for indigoDevice in indigo.devices.iter("self.doorbell"):
+						indigoDevice.updateStateOnServer("onOffState", False)
+						indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
 
 					# Doorbells
 					for ringDevice in self.ring.doorbells:
@@ -134,7 +138,6 @@ class Plugin(indigo.PluginBase):
 							indigoDevice.updateStateOnServer("ringDeviceWifiNetwork", ringDevice.wifi_name)
 							indigoDevice.updateStateOnServer("ringDeviceWifiSignalStrength",
 															 ringDevice.wifi_signal_strength)
-							# self.debugLog(u"%s" % indigoDevice)
 
 							indigoDeviceLastEventTime = datetime.datetime.strptime(
 								indigoDevice.states["lastEventTime"], self.dateFormatString).replace(tzinfo=pytz.UTC)
@@ -144,7 +147,7 @@ class Plugin(indigo.PluginBase):
 								indigoDevice.states["lastMotionTime"], self.dateFormatString).replace(tzinfo=pytz.UTC)
 							indigoDevicePreviousMostRecentEvent = indigoDeviceLastEventTime
 
-							# TODO: Make history limit a heuristic multiplicative factor of update (sleep) frequency
+							# TODO: Make history limit a heuristic, multiplicative factor of update (sleep) frequency
 							for event in ringDevice.history(limit=10):
 								ringDeviceEventTime = \
 									event["created_at"].astimezone(pytz.utc)
@@ -166,11 +169,15 @@ class Plugin(indigo.PluginBase):
 										if (indigoDeviceLastMotionTime < ringDeviceEventTime):
 											indigoDeviceLastMotionTime = ringDeviceEventTime
 											indigoDevice.updateStateOnServer("lastMotionTime", stringifiedTime)
+											indigoDevice.updateStateOnServer("onOffState", True)
+											indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
+
 									elif (event["kind"] == 'ding'):
 										if (indigoDeviceLastDoorbellPressTime < ringDeviceEventTime):
 											indigoDeviceLastDoorbellPressTime = ringDeviceEventTime
 											indigoDevice.updateStateOnServer("lastDoorbellPressTime", stringifiedTime)
-									# TODO: track on_demand connection event times?
+
+									# TODO: track on_demand event type?
 
 				# TODO Change to use a user specified update frequency
 				self.sleep(20) # in seconds
