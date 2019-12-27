@@ -180,7 +180,7 @@ class Plugin(indigo.PluginBase):
 									# TODO: track on_demand event type?
 
 				# TODO Change to use a user specified update frequency
-				self.sleep(20) # in seconds
+				self.sleep(10) # in seconds
 		except self.StopThread:
 			# Close connection to Ring API
 			self.closeConnectionToRing()
@@ -192,6 +192,21 @@ class Plugin(indigo.PluginBase):
 	####################
 	# def refreshAvailableRingDevices(self):
 	# 	return
+
+
+	########################################
+	def printAvailableRingDevices(self):
+		indigo.server.log(u"Retrieving all available devices from Ring.com (this may take a moment, please be patient)")
+		if self.isConnected():
+			for ringDevice in list(self.ring.stickup_cams + self.ring.chimes + self.ring.doorbells):
+				ringDevice.update()
+				self.printRingDeviceToLog(ringDevice, indigo.server.log)
+		else:
+			indigo.server.log(u"Connection to Ring.com API down; can't print devices to Event Log")
+
+		indigo.server.log(u"")
+		indigo.server.log(u"Done printing available Ring devices to Event Log")
+		return
 
 
 	# ########################################
@@ -266,10 +281,11 @@ class Plugin(indigo.PluginBase):
 	####################
 	def currentMappingAndUnmappedRingDevices(self, filter, valuesDict, typeId, targetId):
 		# TODO: change to make use of filter to pick device type to iterate over
-		self.debugLog(u"Finding Ring doorbell devices that are not yet mapped to Indigo devices")
+		self.debugLog(u"Finding currently mapped Ring doorbell device and ones that are not yet mapped to Indigo devices")
 		currentAndUnmappedRingDevices = []
 
 		if self.isConnected():
+			# Doorbells
 			for ringDevice in self.ring.doorbells:
 				# Get most up to date data for the Ring device
 				ringDevice.update()
@@ -326,13 +342,17 @@ class Plugin(indigo.PluginBase):
 
 
 	########################################
-	def debugPrintRingDevice(self, ringDevice):
-		self.debugLog(u' ')
-		self.debugLog(u'Name:       %s' % ringDevice.name)
-		self.debugLog(u'Account ID: %s' % ringDevice.account_id)
-		self.debugLog(u'Address:    %s' % ringDevice.address)
-		self.debugLog(u'Family:     %s' % ringDevice.family)
-		self.debugLog(u'ID:         %s' % ringDevice.id)
-		self.debugLog(u'Timezone:   %s' % ringDevice.timezone)
-		self.debugLog(u'Wifi Name:  %s' % ringDevice.wifi_name)
-		self.debugLog(u'Wifi RSSI:  %s' % ringDevice.wifi_signal_strength)
+	def printRingDeviceToLog(self, ringDevice, logger):
+		logger(u' ')
+		logger(u'Name:          %s' % ringDevice.name)
+		logger(u'Account ID:    %s' % ringDevice.account_id)
+		# logger(u'Location:      %s' % ringDevice.address)
+		logger(u'Model:         %s' % ringDevice.model)
+		logger(u'Family:        %s' % ringDevice.family)
+		logger(u'Firmware:      %s' % ringDevice.firmware)
+		logger(u'Battery Level: %s' % ringDevice.battery_life)
+		logger(u'Volume:        %s' % ringDevice.volume)
+		logger(u'Timezone:      %s' % ringDevice.timezone)
+		# logger(u'MAC Address:   %s' % ringDevice.id)
+		# logger(u'Wifi Name:     %s' % ringDevice.wifi_name)
+		# logger(u'Wifi RSSI:     %s' % ringDevice.wifi_signal_strength)
