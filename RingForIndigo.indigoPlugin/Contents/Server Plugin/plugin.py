@@ -119,6 +119,8 @@ class Plugin(indigo.PluginBase):
 						if (indigoDevice is not None):
 							# Get latest state and events for Ring device
 							ringDevice.update()
+							# TODO: use a keyValueList to update states in one fell swoop, instead of one at a time
+							#  - see SDK sensor plugin example
 							indigoDevice.updateStateOnServer("ringDeviceName", ringDevice.name)
 							indigoDevice.updateStateOnServer("ringDeviceId", ringDevice.account_id)
 							indigoDevice.updateStateOnServer("ringDeviceLocation", ringDevice.address)
@@ -220,43 +222,11 @@ class Plugin(indigo.PluginBase):
 	def deviceStartComm(self, indigoDevice):
 		# Called when communication with the hardware should be started.
 
-		# Initialize device state (i.e. for newly created Indigo devices)
-		# TODO: use a keyValueList to update states in one fell swoop, instead of one at a time - see SDK sensor plugin example
+		# Initialize device state for newly created Indigo devices
 		subModel = indigoDevice.pluginProps.get("selectedRingDeviceModel", "")
 		if indigoDevice.subModel != subModel:
 			indigoDevice.subModel = subModel
 			indigoDevice.replaceOnServer()
-
-		# TODO: Bookmark here for currently working on - need to figure out ho states reload... do we need to init them every load, even for existing devices?  If so, need to pull from Ring.com API
-		ringDeviceId = indigoDevice.address
-		if (indigoDevice.states["ringDeviceId"] != ringDeviceId):
-			self.debugLog("====================================")
-			self.debugLog("SHOULD ONLY BE CALLED FOR NEW DEVICE")
-			indigoDevice.updateStateOnServer("ringDeviceId", indigoDevice.address)
-			self.debugLog("====================================")
-
-		indigoDevice.updateStateOnServer("ringDeviceName",
-										 indigoDevice.pluginProps.get("selectedRingDeviceName", ""))
-		indigoDevice.updateStateOnServer("ringDeviceLocation",
-										 indigoDevice.pluginProps.get("selectedRingDeviceLocation", ""))
-		indigoDevice.updateStateOnServer("ringDeviceModel",
-										 indigoDevice.pluginProps.get("selectedRingDeviceModel", ""))
-		indigoDevice.updateStateOnServer("ringDeviceFamily",
-										 indigoDevice.pluginProps.get("selectedRingDeviceFamily", ""))
-		indigoDevice.updateStateOnServer("ringDeviceFirmware",
-										 indigoDevice.pluginProps.get("selectedRingDeviceFirmware", ""))
-		indigoDevice.updateStateOnServer("ringDeviceBatteryLevel",
-										 indigoDevice.pluginProps.get("selectedRingDeviceBatteryLevel", ""))
-		indigoDevice.updateStateOnServer("ringDeviceVolume",
-										 indigoDevice.pluginProps.get("selectedRingDeviceVolume", ""))
-		indigoDevice.updateStateOnServer("ringDeviceTimezone",
-										 indigoDevice.pluginProps.get("selectedRingDeviceTimezone", ""))
-		indigoDevice.updateStateOnServer("ringDeviceWifiMACAddress",
-										 indigoDevice.pluginProps.get("selectedRingDeviceWifiMACAddress", ""))
-		indigoDevice.updateStateOnServer("ringDeviceWifiNetwork",
-										 indigoDevice.pluginProps.get("selectedRingDeviceWifiNetwork", ""))
-		indigoDevice.updateStateOnServer("ringDeviceWifiSignalStrength",
-										 indigoDevice.pluginProps.get("selectedRingDeviceWifiSignalStrength", ""))
 
 		# Initialize lastEventTime, lastDoorbellPressTime, lastMotionTime to date in distant past if needed
 		distantPast = datetime.datetime(
@@ -274,11 +244,6 @@ class Plugin(indigo.PluginBase):
 			indigoDevice.updateStateOnServer("lastDoorbellPressTime", stringifiedDistantPast)
 		if ((indigoDevice.states["lastMotionTime"] is None) or (indigoDevice.states["lastMotionTime"] == "")):
 			indigoDevice.updateStateOnServer("lastMotionTime", stringifiedDistantPast)
-
-		# TODO: Remove this debug code
-		# indigoDevice.updateStateOnServer("lastEventTime", stringifiedDistantPast)
-		# indigoDevice.updateStateOnServer("lastDoorbellPressTime", stringifiedDistantPast)
-		# indigoDevice.updateStateOnServer("lastMotionTime", stringifiedDistantPast)
 
 
 	########################################
