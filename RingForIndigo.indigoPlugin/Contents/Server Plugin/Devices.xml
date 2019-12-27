@@ -45,7 +45,7 @@
 
 			<Field id="doorbellDropDownListSelection" type="menu">
 				<Label>Ring.com Doorbell Device:</Label>
-				<List class="self" filter="doorbell" method="currentMappingAndUnmappedRingDevices"/>
+				<List class="self" filter="doorbell" method="currentMappedPlusUnmappedRingDevices"/>
 				<CallbackMethod>ringDoorbellDeviceSelectionChange</CallbackMethod>
 			</Field>
 

@@ -244,6 +244,10 @@ class Plugin(indigo.PluginBase):
 	def deviceStartComm(self, indigoDevice):
 		# Called when communication with the hardware should be started.
 
+		# Initialize onOffState and state image
+		indigoDevice.updateStateOnServer("onOffState", False)
+		indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
+
 		# Initialize device state for newly created Indigo devices
 		subModel = indigoDevice.pluginProps.get("selectedRingDeviceModel", "")
 		if indigoDevice.subModel != subModel:
@@ -279,10 +283,10 @@ class Plugin(indigo.PluginBase):
 	########################################
 	# Methods and callbacks defined in Devices.xml:
 	####################
-	def currentMappingAndUnmappedRingDevices(self, filter, valuesDict, typeId, targetId):
+	def currentMappedPlusUnmappedRingDevices(self, filter, valuesDict, typeId, targetId):
 		# TODO: change to make use of filter to pick device type to iterate over
 		self.debugLog(u"Finding currently mapped Ring doorbell device and ones that are not yet mapped to Indigo devices")
-		currentAndUnmappedRingDevices = []
+		currentMappedPlusUnmappedRingDevicesList = []
 
 		if self.isConnected():
 			# Doorbells
@@ -295,9 +299,9 @@ class Plugin(indigo.PluginBase):
 				if ((indigoDevice is None) or (str(valuesDict["address"]) == indigoDevice.address)):
 					# Add to the list if no existing mapping, or if mapping is to the device we're
 					# currently configuring
-					currentAndUnmappedRingDevices.append((ringDevice.account_id, ringDevice.name))
+					currentMappedPlusUnmappedRingDevicesList.append((ringDevice.account_id, ringDevice.name))
 
-		return currentAndUnmappedRingDevices
+		return currentMappedPlusUnmappedRingDevicesList
 
 
 	########################################
@@ -343,6 +347,7 @@ class Plugin(indigo.PluginBase):
 
 	########################################
 	def printRingDeviceToLog(self, ringDevice, logger):
+		# TODO: uncomment all lines below
 		logger(u' ')
 		logger(u'Name:          %s' % ringDevice.name)
 		logger(u'Account ID:    %s' % ringDevice.account_id)
