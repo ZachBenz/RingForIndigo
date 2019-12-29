@@ -212,15 +212,6 @@ class Plugin(indigo.PluginBase):
 		return
 
 
-	# ########################################
-	def validateDeviceConfigUi(self, valuesDict, typeId, devId):
-		if (valuesDict["doorbellDropDownListSelection"] == ""):
-			errorDict = indigo.Dict()
-			errorDict["doorbellDropDownListSelection"] = "You must pick an available Ring device from the dropdown list"
-			return(False, valuesDict, errorDict)
-		return True
-
-
 	########################################
 	def validatePrefsConfigUi(self, valuesDict):
 		# Update debug log print setting
@@ -242,6 +233,29 @@ class Plugin(indigo.PluginBase):
 
 		# PluginPrefs will be updated AFTER we exit this method if we say validation was good
 		self.debugLog(u"Validated plugin configuration changes")
+		return True
+
+
+	# ########################################
+	def validateDeviceConfigUi(self, valuesDict, typeId, devId):
+		if (typeId == "doorbell"):
+			if (valuesDict["doorbellDropDownListSelection"] == ""):
+				errorDict = indigo.Dict()
+				errorDict["doorbellDropDownListSelection"] = "You must pick an available Ring device from the dropdown list"
+				return(False, valuesDict, errorDict)
+		return True
+
+
+	########################################
+	def validateActionConfigUi(self, valuesDict, typeId, deviceId):
+		if (typeId == "downloadVideo"):
+			errorDict = indigo.Dict()
+			if (valuesDict["downloadFilePath"] == ""):
+				errorDict["downloadFilePath"] = "You must specify a filename to download video for event to"
+			if ((valuesDict["eventIdOption"] == "specifyEventId") and (valuesDict["userSpecifiedEventId"] == "")):
+				errorDict["userSpecifiedEventId"] = "You must specify an event ID to download video for"
+			if (len(errorDict) > 0):
+				return (False, valuesDict, errorDict)
 		return True
 
 
