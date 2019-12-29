@@ -301,9 +301,11 @@ class Plugin(indigo.PluginBase):
 				
 				# See if there is already a mapping to an Indigo device for this Ring device
 				indigoDevice = self.getExistingIndigoDeviceMapping(ringDevice, "doorbell")
-				if ((indigoDevice is None) or (str(valuesDict["address"]) == indigoDevice.address)):
-					# Add to the list if no existing mapping, or if mapping is to the device we're
-					# currently configuring
+				if (indigoDevice is None):
+					# Add to the list if no existing mapping
+					currentMappedPlusUnmappedRingDevicesList.append((ringDevice.account_id, ringDevice.name))
+				elif (("address" in valuesDict) and (str(valuesDict["address"]) == indigoDevice.address)):
+					# Add to the list if mapping is to the device we're currently configuring
 					currentMappedPlusUnmappedRingDevicesList.append((ringDevice.account_id, ringDevice.name))
 
 		return currentMappedPlusUnmappedRingDevicesList
