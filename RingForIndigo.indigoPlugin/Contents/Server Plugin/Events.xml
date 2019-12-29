@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<Events>
+    <SupportURL>https://forums.indigodomo.com/viewforum.php?f=323</SupportURL>
+    <Event id="videoDownloadCompleteEvent">
+        <Name>Video Download Complete</Name>
+        <ConfigUI>
+            <SupportURL>https://forums.indigodomo.com/viewforum.php?f=323</SupportURL>
+            <Field id="indigoDeviceId" type="menu">
+                <Label>Select which device to monitor for event:</Label>
+                <List class="self" filter="" method="listIndigoDevices" dynamicReload="true"/>
+            </Field>
+        </ConfigUI>
+    </Event>
+</Events>

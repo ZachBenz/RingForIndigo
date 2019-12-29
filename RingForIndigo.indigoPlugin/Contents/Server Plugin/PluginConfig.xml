@@ -1,5 +1,6 @@
 <?xml version="1.0"?>
 <PluginConfig>
+	<SupportURL>https://forums.indigodomo.com/viewforum.php?f=323</SupportURL>
 	<!--	TODO: Still figuring out how much a secondary account can/can't do... seems like no chimes, at the least...
 	or perhaps has to do with the User-Agent used to connect?  Hard to say
 	Might need to add to label: "Note that secondary accounts cannot access Ring Chime devices."

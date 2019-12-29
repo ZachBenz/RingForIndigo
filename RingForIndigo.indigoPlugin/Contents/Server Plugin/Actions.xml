@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <Actions>
 	<SupportURL>https://forums.indigodomo.com/viewforum.php?f=323</SupportURL>
-	<Action id="downloadVideo" deviceFilter="self">
+	<Action id="downloadVideoAction" deviceFilter="self">
 		<Name>Download Video for Specified Event</Name>
 		<CallbackMethod>downloadVideoForEvent</CallbackMethod>
 		<ConfigUI>

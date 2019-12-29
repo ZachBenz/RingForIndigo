@@ -25,7 +25,8 @@ class Plugin(indigo.PluginBase):
 		super(Plugin, self).__init__(pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
 		self.debug = pluginPrefs.get(u"printDebugInEventLog", False)
 		self.ring = None
-		self.dateFormatString = '%Y-%m-%d %H:%M:%S %Z'
+		self.dateFormatString = '%Y-%m-%d %H:%M:%S %Z'   # TODO: Really a constant, move to a const.py or equivalent
+		self.activeDownloadCompleteTriggers = {}
 		# TODO: Initialize some tables mapping Indigo devices to Ring devices to make lookups more efficient?
 
 
@@ -145,7 +146,8 @@ class Plugin(indigo.PluginBase):
 							indigoDeviceLastEventTime = datetime.datetime.strptime(
 								indigoDevice.states["lastEventTime"], self.dateFormatString).replace(tzinfo=pytz.UTC)
 							indigoDeviceLastDoorbellPressTime = datetime.datetime.strptime(
-								indigoDevice.states["lastDoorbellPressTime"], self.dateFormatString).replace(tzinfo=pytz.UTC)
+								indigoDevice.states["lastDoorbellPressTime"],
+								self.dateFormatString).replace(tzinfo=pytz.UTC)
 							indigoDeviceLastMotionTime = datetime.datetime.strptime(
 								indigoDevice.states["lastMotionTime"], self.dateFormatString).replace(tzinfo=pytz.UTC)
 							indigoDevicePreviousMostRecentEvent = indigoDeviceLastEventTime
@@ -193,11 +195,6 @@ class Plugin(indigo.PluginBase):
 	########################################
 	# Actions defined in MenuItems.xml:
 	####################
-	# def refreshAvailableRingDevices(self):
-	# 	return
-
-
-	########################################
 	def printAvailableRingDevices(self):
 		indigo.server.log(u"Retrieving all available devices from Ring.com (this may take a moment, please be patient)")
 		if self.isConnected():
@@ -241,14 +238,15 @@ class Plugin(indigo.PluginBase):
 		if (typeId == "doorbell"):
 			if (valuesDict["doorbellDropDownListSelection"] == ""):
 				errorDict = indigo.Dict()
-				errorDict["doorbellDropDownListSelection"] = "You must pick an available Ring device from the dropdown list"
+				errorDict["doorbellDropDownListSelection"] = \
+					"You must pick an available Ring device from the dropdown list"
 				return(False, valuesDict, errorDict)
 		return True
 
 
 	########################################
 	def validateActionConfigUi(self, valuesDict, typeId, deviceId):
-		if (typeId == "downloadVideo"):
+		if (typeId == "downloadVideoAction"):
 			errorDict = indigo.Dict()
 			if (valuesDict["downloadFilePath"] == ""):
 				errorDict["downloadFilePath"] = "You must specify a filename to download video for event to"
@@ -256,6 +254,11 @@ class Plugin(indigo.PluginBase):
 				errorDict["userSpecifiedEventId"] = "You must specify an event ID to download video for"
 			if (len(errorDict) > 0):
 				return (False, valuesDict, errorDict)
+		return True
+
+
+	########################################
+	def validateEventConfigUi(self, valuesDict, typeId, eventId):
 		return True
 
 
@@ -283,9 +286,12 @@ class Plugin(indigo.PluginBase):
 			second=0,
 			tzinfo=pytz.UTC)
 		stringifiedDistantPast = datetime.datetime.strftime(distantPast, self.dateFormatString)
+		# TODO: use a keyValueList to update states in one fell swoop, instead of one at a time
+		#  - see SDK sensor plugin example
 		if ((indigoDevice.states["lastEventTime"] is None) or (indigoDevice.states["lastEventTime"] == "")):
 			indigoDevice.updateStateOnServer("lastEventTime", stringifiedDistantPast)
-		if ((indigoDevice.states["lastDoorbellPressTime"] is None) or (indigoDevice.states["lastDoorbellPressTime"] == "")):
+		if ((indigoDevice.states["lastDoorbellPressTime"] is None) or
+				(indigoDevice.states["lastDoorbellPressTime"] == "")):
 			indigoDevice.updateStateOnServer("lastDoorbellPressTime", stringifiedDistantPast)
 		if ((indigoDevice.states["lastMotionTime"] is None) or (indigoDevice.states["lastMotionTime"] == "")):
 			indigoDevice.updateStateOnServer("lastMotionTime", stringifiedDistantPast)
@@ -314,7 +320,14 @@ class Plugin(indigo.PluginBase):
 			ringDevice = self.getExistingRingDeviceMappingForIndigoDevice(indigoDevice.address)
 
 			if (ringDevice.recording_download(eventId, filename, override=True)):
+				# Download succeeded
 				self.debugLog(u"Downloaded video of event for '%s' to %s" % (indigoDevice.name, filename))
+
+				# Check for triggers we need to execute
+				for triggerId, trigger in sorted(self.activeDownloadCompleteTriggers.iteritems()):
+					triggerIndigoDeviceId = trigger.pluginProps.get("indigoDeviceId", "")
+					if ((triggerIndigoDeviceId == "-1") or (triggerIndigoDeviceId == str(indigoDevice.id))):
+						indigo.trigger.execute(trigger)
 			else:
 				indigo.server.log(u"Unable to download event id %s for %s" % (eventId, indigoDevice.name), isError=True)
 		else:
@@ -323,6 +336,7 @@ class Plugin(indigo.PluginBase):
 			return
 
 		return
+
 
 	########################################
 	# Methods and callbacks defined in Devices.xml:
@@ -375,6 +389,29 @@ class Plugin(indigo.PluginBase):
 
 
 	########################################
+	# Actions defined in Events.xml:
+	####################
+	def listIndigoDevices(self, filter, valuesDict, typeId, targetId):
+		deviceList = [("-1","Any Ring device you have defined in Indigo")]
+		for indigoDevice in indigo.devices.iter("self"):
+			deviceList.append((indigoDevice.id, indigoDevice.name))
+		return deviceList
+
+	########################################
+	# Keep track of subscribed triggers
+	####################
+	def triggerStartProcessing(self, trigger):
+		if trigger.pluginTypeId == "videoDownloadCompleteEvent":
+			self.activeDownloadCompleteTriggers[trigger.id] = trigger
+
+
+	########################################
+	def triggerStopProcessing(self, trigger):
+		if trigger.pluginTypeId == "videoDownloadCompleteEvent":
+			del self.activeDownloadCompleteTriggers[trigger.id]
+
+
+	########################################
 	def getExistingIndigoDeviceMappingForRingDevice(self, ringDevice, indigoDeviceTypeId):
 		# TODO: Inefficient to iterate over the indigo devices every time; consider a more efficient mapping
 		mappedIndigoDevice = None
@@ -384,6 +421,7 @@ class Plugin(indigo.PluginBase):
 					mappedIndigoDevice = indigoDevice
 					break
 		return mappedIndigoDevice
+
 
 	########################################
 	def getExistingRingDeviceMappingForIndigoDevice(self, indigoDeviceAddress):

@@ -25,6 +25,7 @@
 	<Device type="sensor" id="doorbell">
 		<Name>Doorbell</Name>
 		<ConfigUI>
+			<SupportURL>https://forums.indigodomo.com/viewforum.php?f=323</SupportURL>
 			<Field id="SupportsOnState" type="checkbox" defaultValue="true" hidden="true">
 				<Label>HIDDEN, SHOULD NOT DISPLAY; Show ON/OFF state</Label>
 			</Field>

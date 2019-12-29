@@ -6,13 +6,6 @@
 	 back to the user you can post information into the Event Log.
 -->
 <MenuItems>
-	<!--	TODO: Hidden - Not ready for primetime...
-	-->
-<!--	<MenuItem id="menuItemRefreshDevices">-->
-<!--		<Name>Refresh Available Devices from Ring.com</Name>-->
-<!--		<CallbackMethod>refreshAvailableRingDevices</CallbackMethod>-->
-<!--	</MenuItem>-->
-
 	<MenuItem id="menuItemPrintDevicesToLog">
 		<Name>Print all available Ring devices to Event Log</Name>
 		<CallbackMethod>printAvailableRingDevices</CallbackMethod>
