@@ -104,7 +104,10 @@ class Plugin(indigo.PluginBase):
 				self.debugLog(u"Connected to Ring.com API?: %s" % (self.isConnected()))
 				if (self.isConnected() is False):
 					# Connection is not currently up, attempt to establish connection
-					self.makeConnectionToRing(self.pluginPrefs['username'], self.pluginPrefs['password'])
+					if (('username' in self.pluginPrefs) and ('password' in self.pluginPrefs)):
+						self.makeConnectionToRing(self.pluginPrefs['username'], self.pluginPrefs['password'])
+					else:
+						self.debugLog(u"pluginPrefs do not yet have username and/or password field")
 
 				# If we are connected, update events and device status (otherwise, wait until after sleep to try again)
 				if (self.isConnected() is True):
@@ -233,6 +236,8 @@ class Plugin(indigo.PluginBase):
 			return (False, valuesDict, errorDict)
 
 		# Update connection to Ring API based on changes to credentials
+		# TODO: Do we really want to do this in the validate function... is there another callback method that
+		#  should do it in?
 		self.makeConnectionToRing(valuesDict.get("username", None), valuesDict.get("password", None))
 
 		# PluginPrefs will be updated AFTER we exit this method if we say validation was good
