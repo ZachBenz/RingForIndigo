@@ -360,7 +360,7 @@ class Plugin(indigo.PluginBase):
 		logger(u'Model:         %s' % ringDevice.model)
 		logger(u'Family:        %s' % ringDevice.family)
 		logger(u'Firmware:      %s' % ringDevice.firmware)
-		logger(u'Battery Level: %s' % ringDevice.battery_life)
+		# logger(u'Battery Level: %s' % ringDevice.battery_life)
 		logger(u'Volume:        %s' % ringDevice.volume)
 		logger(u'Timezone:      %s' % ringDevice.timezone)
 		# logger(u'MAC Address:   %s' % ringDevice.id)
