@@ -104,7 +104,10 @@ class Plugin(indigo.PluginBase):
 				self.debugLog(u"Connected to Ring.com API?: %s" % (self.isConnected()))
 				if (self.isConnected() is False):
 					# Connection is not currently up, attempt to establish connection
-					self.makeConnectionToRing(self.pluginPrefs['username'], self.pluginPrefs['password'])
+					if (('username' in self.pluginPrefs) and ('password' in self.pluginPrefs)):
+						self.makeConnectionToRing(self.pluginPrefs['username'], self.pluginPrefs['password'])
+					else:
+						self.debugLog(u"pluginPrefs do not yet have username and/or password field")
 
 				# If we are connected, update events and device status (otherwise, wait until after sleep to try again)
 				if (self.isConnected() is True):
@@ -180,7 +183,7 @@ class Plugin(indigo.PluginBase):
 									# TODO: track on_demand event type?
 
 				# TODO Change to use a user specified update frequency
-				self.sleep(20) # in seconds
+				self.sleep(10) # in seconds
 		except self.StopThread:
 			# Close connection to Ring API
 			self.closeConnectionToRing()
@@ -192,6 +195,21 @@ class Plugin(indigo.PluginBase):
 	####################
 	# def refreshAvailableRingDevices(self):
 	# 	return
+
+
+	########################################
+	def printAvailableRingDevices(self):
+		indigo.server.log(u"Retrieving all available devices from Ring.com (this may take a moment, please be patient)")
+		if self.isConnected():
+			for ringDevice in list(self.ring.stickup_cams + self.ring.chimes + self.ring.doorbells):
+				ringDevice.update()
+				self.printRingDeviceToLog(ringDevice, indigo.server.log)
+		else:
+			indigo.server.log(u"Connection to Ring.com API down; can't print devices to Event Log")
+
+		indigo.server.log(u"")
+		indigo.server.log(u"Done printing available Ring devices to Event Log")
+		return
 
 
 	# ########################################
@@ -218,6 +236,8 @@ class Plugin(indigo.PluginBase):
 			return (False, valuesDict, errorDict)
 
 		# Update connection to Ring API based on changes to credentials
+		# TODO: Do we really want to do this in the validate function... is there another callback method that
+		#  should do it in?
 		self.makeConnectionToRing(valuesDict.get("username", None), valuesDict.get("password", None))
 
 		# PluginPrefs will be updated AFTER we exit this method if we say validation was good
@@ -228,6 +248,10 @@ class Plugin(indigo.PluginBase):
 	########################################
 	def deviceStartComm(self, indigoDevice):
 		# Called when communication with the hardware should be started.
+
+		# Initialize onOffState and state image
+		indigoDevice.updateStateOnServer("onOffState", False)
+		indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
 
 		# Initialize device state for newly created Indigo devices
 		subModel = indigoDevice.pluginProps.get("selectedRingDeviceModel", "")
@@ -264,12 +288,13 @@ class Plugin(indigo.PluginBase):
 	########################################
 	# Methods and callbacks defined in Devices.xml:
 	####################
-	def currentMappingAndUnmappedRingDevices(self, filter, valuesDict, typeId, targetId):
+	def currentMappedPlusUnmappedRingDevices(self, filter, valuesDict, typeId, targetId):
 		# TODO: change to make use of filter to pick device type to iterate over
-		self.debugLog(u"Finding Ring doorbell devices that are not yet mapped to Indigo devices")
-		currentAndUnmappedRingDevices = []
+		self.debugLog(u"Finding currently mapped Ring doorbell device and ones that are not yet mapped to Indigo devices")
+		currentMappedPlusUnmappedRingDevicesList = []
 
 		if self.isConnected():
+			# Doorbells
 			for ringDevice in self.ring.doorbells:
 				# Get most up to date data for the Ring device
 				ringDevice.update()
@@ -279,9 +304,9 @@ class Plugin(indigo.PluginBase):
 				if ((indigoDevice is None) or (str(valuesDict["address"]) == indigoDevice.address)):
 					# Add to the list if no existing mapping, or if mapping is to the device we're
 					# currently configuring
-					currentAndUnmappedRingDevices.append((ringDevice.account_id, ringDevice.name))
+					currentMappedPlusUnmappedRingDevicesList.append((ringDevice.account_id, ringDevice.name))
 
-		return currentAndUnmappedRingDevices
+		return currentMappedPlusUnmappedRingDevicesList
 
 
 	########################################
@@ -326,13 +351,18 @@ class Plugin(indigo.PluginBase):
 
 
 	########################################
-	def debugPrintRingDevice(self, ringDevice):
-		self.debugLog(u' ')
-		self.debugLog(u'Name:       %s' % ringDevice.name)
-		self.debugLog(u'Account ID: %s' % ringDevice.account_id)
-		self.debugLog(u'Address:    %s' % ringDevice.address)
-		self.debugLog(u'Family:     %s' % ringDevice.family)
-		self.debugLog(u'ID:         %s' % ringDevice.id)
-		self.debugLog(u'Timezone:   %s' % ringDevice.timezone)
-		self.debugLog(u'Wifi Name:  %s' % ringDevice.wifi_name)
-		self.debugLog(u'Wifi RSSI:  %s' % ringDevice.wifi_signal_strength)
+	def printRingDeviceToLog(self, ringDevice, logger):
+		# TODO: uncomment all lines below
+		logger(u' ')
+		logger(u'Name:          %s' % ringDevice.name)
+		logger(u'Account ID:    %s' % ringDevice.account_id)
+		# logger(u'Location:      %s' % ringDevice.address)
+		logger(u'Model:         %s' % ringDevice.model)
+		logger(u'Family:        %s' % ringDevice.family)
+		logger(u'Firmware:      %s' % ringDevice.firmware)
+		logger(u'Battery Level: %s' % ringDevice.battery_life)
+		logger(u'Volume:        %s' % ringDevice.volume)
+		logger(u'Timezone:      %s' % ringDevice.timezone)
+		# logger(u'MAC Address:   %s' % ringDevice.id)
+		# logger(u'Wifi Name:     %s' % ringDevice.wifi_name)
+		# logger(u'Wifi RSSI:     %s' % ringDevice.wifi_signal_strength)
