@@ -49,7 +49,7 @@
 				<CallbackMethod>ringDoorbellDeviceSelectionChange</CallbackMethod>
 			</Field>
 
-			<Field id="separator1" type="separator"/>
+			<Field id="separatorDoorbellDevice" type="separator"/>
 
 			<Field id="readonlyDeviceDetails" type="label" fontSize="small" fontColor="darkgray">
         		<Label>Details from Ring.com for selected Ring device:</Label>
