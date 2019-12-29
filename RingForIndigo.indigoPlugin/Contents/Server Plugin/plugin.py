@@ -26,7 +26,7 @@ class Plugin(indigo.PluginBase):
 		self.debug = pluginPrefs.get(u"printDebugInEventLog", False)
 		self.ring = None
 		self.dateFormatString = '%Y-%m-%d %H:%M:%S %Z'
-		# TODO: Initialize some tables mapping Indigo devices to Ring devices to make things lookups more efficient?
+		# TODO: Initialize some tables mapping Indigo devices to Ring devices to make lookups more efficient?
 
 
 	########################################
@@ -122,7 +122,7 @@ class Plugin(indigo.PluginBase):
 					# Doorbells
 					for ringDevice in self.ring.doorbells:
 						# Check to see if this ringDevice is mapped to an Indigo device
-						indigoDevice = self.getExistingIndigoDeviceMapping(ringDevice, "doorbell")
+						indigoDevice = self.getExistingIndigoDeviceMappingForRingDevice(ringDevice, "doorbell")
 						if (indigoDevice is not None):
 							# Get latest state and events for Ring device
 							ringDevice.update()
@@ -280,10 +280,35 @@ class Plugin(indigo.PluginBase):
 	########################################
 	# Plugin Actions object callbacks (pluginAction is an Indigo plugin action instance)
 	######################
-	# def downloadVideo(self, pluginAction):
-	# 	self.debugLog(u"downloadVideo action called:\n" + str(pluginAction))
-	# 	return
+	def downloadVideoForEvent(self, pluginAction):
+		indigoDevice = indigo.devices[pluginAction.deviceId]
 
+		filename = pluginAction.props.get('downloadFilePath', "")
+		eventId = ""
+		if ("lastEventId" in indigoDevice.states):
+			eventId = indigoDevice.states["lastEventId"]
+		eventIdOption = pluginAction.props.get('eventIdOption', "lastEventId")
+		if eventIdOption == "specifyEventId":
+			eventId = pluginAction.props.get('userSpecifiedEventId', "")
+
+		# Make sure we have an event ID to process
+		if eventId == "":
+			indigo.server.log(u"No Event ID specified to download for %s" % (indigoDevice.name), isError=True)
+			return
+
+		if filename:
+			ringDevice = self.getExistingRingDeviceMappingForIndigoDevice(indigoDevice.address)
+
+			if (ringDevice.recording_download(eventId, filename, override=True)):
+				self.debugLog(u"Downloaded video of event for '%s' to %s" % (indigoDevice.name, filename))
+			else:
+				indigo.server.log(u"Unable to download event id %s for %s" % (eventId, indigoDevice.name), isError=True)
+		else:
+			indigo.server.log(u"Missing filename setting in action settings for video download of event for '%s'"
+							  % indigoDevice.name, isError=True)
+			return
+
+		return
 
 	########################################
 	# Methods and callbacks defined in Devices.xml:
@@ -300,7 +325,7 @@ class Plugin(indigo.PluginBase):
 				ringDevice.update()
 				
 				# See if there is already a mapping to an Indigo device for this Ring device
-				indigoDevice = self.getExistingIndigoDeviceMapping(ringDevice, "doorbell")
+				indigoDevice = self.getExistingIndigoDeviceMappingForRingDevice(ringDevice, "doorbell")
 				if (indigoDevice is None):
 					# Add to the list if no existing mapping
 					currentMappedPlusUnmappedRingDevicesList.append((ringDevice.account_id, ringDevice.name))
@@ -315,12 +340,7 @@ class Plugin(indigo.PluginBase):
 	def ringDoorbellDeviceSelectionChange(self, valuesDict, typeId, devId):
 		self.debugLog(u"Ring device selection changed in Indigo device settings")
 
-		# TODO: Inefficient to iterate over the Ring devices every time; consider a more efficient mapping
-		mappedRingDevice = None
-		for ringDoorbellDevice in self.ring.doorbells:
-			if (str(ringDoorbellDevice.account_id) == valuesDict["doorbellDropDownListSelection"]):
-				mappedRingDevice = ringDoorbellDevice
-				break
+		mappedRingDevice = self.getExistingRingDeviceMappingForIndigoDevice(valuesDict["doorbellDropDownListSelection"])
 
 		if (mappedRingDevice is not None):
 			valuesDict["address"] = mappedRingDevice.account_id
@@ -341,7 +361,7 @@ class Plugin(indigo.PluginBase):
 
 
 	########################################
-	def getExistingIndigoDeviceMapping(self, ringDevice, indigoDeviceTypeId):
+	def getExistingIndigoDeviceMappingForRingDevice(self, ringDevice, indigoDeviceTypeId):
 		# TODO: Inefficient to iterate over the indigo devices every time; consider a more efficient mapping
 		mappedIndigoDevice = None
 		if (indigoDeviceTypeId == "doorbell"):
@@ -351,10 +371,20 @@ class Plugin(indigo.PluginBase):
 					break
 		return mappedIndigoDevice
 
+	########################################
+	def getExistingRingDeviceMappingForIndigoDevice(self, indigoDeviceAddress):
+		# TODO: Inefficient to iterate over the Ring devices every time; consider a more efficient mapping
+		mappedRingDevice = None
+		for ringDoorbellDevice in self.ring.doorbells:
+			if (str(ringDoorbellDevice.account_id) == indigoDeviceAddress):
+				mappedRingDevice = ringDoorbellDevice
+				break
+		return mappedRingDevice
+
 
 	########################################
 	def printRingDeviceToLog(self, ringDevice, logger):
-		# TODO: uncomment all lines below
+		# TODO: Add in exception checking and uncomment all lines below (also add in capability checking)
 		logger(u' ')
 		logger(u'Name:          %s' % ringDevice.name)
 		logger(u'Account ID:    %s' % ringDevice.account_id)
