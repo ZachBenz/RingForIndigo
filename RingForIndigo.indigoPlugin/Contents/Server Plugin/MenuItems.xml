@@ -7,7 +7,7 @@
 -->
 <MenuItems>
 	<MenuItem id="menuItemPrintDevicesToLog">
-		<Name>Print all available Ring devices to Event Log</Name>
+		<Name>Print all devices available from Ring.com API to Event Log</Name>
 		<CallbackMethod>printAvailableRingDevices</CallbackMethod>
 	</MenuItem>
 </MenuItems>
