@@ -6,9 +6,9 @@
 
 import indigo
 
-import os
-import sys
-import time
+# import os
+# import sys
+# import time
 import requests
 import datetime
 import pytz
@@ -28,8 +28,9 @@ class Plugin(indigo.PluginBase):
 		super(Plugin, self).__init__(pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
 		self.debug = pluginPrefs.get(u"printDebugInEventLog", False)
 		self.ring = None
-		self.dateFormatString = '%Y-%m-%d %H:%M:%S %Z'   # TODO: Really a constant, move to a const.py or equivalent
+		self.dateFormatString = '%Y-%m-%d %H:%M:%S %Z'   # TODO: Really a constant, move to a const.py or equivalent?
 		self.activeButtonPushedTriggers = {}
+		self.activeMotionDetectedTriggers = {}
 		self.activeDownloadCompleteTriggers = {}
 		self.twoFactorAuthorizationCode = ""
 		self.twoFactorRequestLimiterEngaged = False
@@ -113,6 +114,7 @@ class Plugin(indigo.PluginBase):
 	def runConcurrentThread(self):
 		try:
 			while True:
+				# Check to see if our connection to the Ring.com API is up
 				self.debugLog(u"Connected to Ring.com API?: %s" % (self.isConnected()))
 				if (self.isConnected() is False):
 					# Connection is not currently up, attempt to establish connection
@@ -145,33 +147,33 @@ class Plugin(indigo.PluginBase):
 					# TODO: Consider having a different update frequency for clearing motion sensed state
 					for indigoDevice in indigo.devices.iter("self.doorbell"):
 						indigoDevice.updateStateOnServer("onOffState", False)
-						indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
+						indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.MotionSensor)
 
 					# Doorbells
 					for ringDevice in self.ring.doorbells:
-						# Check to see if this ringDevice is mapped to an Indigo device
+						# Check to see if this ringDevice is mapped to an Indigo device, otherwise ignore it
 						indigoDevice = self.getExistingIndigoDeviceMappingForRingDevice(ringDevice, "doorbell")
 						if (indigoDevice is not None):
-							# Get latest state and events for Ring device
+							# Get latest state and events for this Ring device
 							ringDevice.update()
 
-							# TODO: use a keyValueList to update states in one fell swoop, instead of one at a time
-							#  - see SDK sensor plugin example
-							indigoDevice.updateStateOnServer("ringDeviceName", ringDevice.name)
-							indigoDevice.updateStateOnServer("ringDeviceId", ringDevice.account_id)
-							indigoDevice.updateStateOnServer("ringDeviceLocation", ringDevice.address)
-							indigoDevice.updateStateOnServer("ringDeviceModel", ringDevice.model)
-							indigoDevice.updateStateOnServer("ringDeviceFamily", ringDevice.family)
-							indigoDevice.updateStateOnServer("ringDeviceFirmware", ringDevice.firmware)
-							indigoDevice.updateStateOnServer("ringDeviceBatteryLevel", ringDevice.battery_life)
-							indigoDevice.updateStateOnServer("ringDeviceVolume", ringDevice.volume)
-							indigoDevice.updateStateOnServer("ringDeviceTimezone", ringDevice.timezone)
-							indigoDevice.updateStateOnServer("ringDeviceWifiMACAddress", ringDevice.id)
-							indigoDevice.updateStateOnServer("ringDeviceWifiNetwork", ringDevice.wifi_name)
-							indigoDevice.updateStateOnServer("ringDeviceWifiSignalStrength",
-															 ringDevice.wifi_signal_strength)
+							# Keep track of updated device states
+							keyValueList = []
+							keyValueList.append({'key': 'ringDeviceName', 'value': ringDevice.name})
+							keyValueList.append({'key': 'ringDeviceId', 'value': ringDevice.account_id})
+							keyValueList.append({'key': 'ringDeviceLocation', 'value': ringDevice.address})
+							keyValueList.append({'key': 'ringDeviceModel', 'value': ringDevice.model})
+							keyValueList.append({'key': 'ringDeviceFamily', 'value': ringDevice.family})
+							keyValueList.append({'key': 'ringDeviceFirmware', 'value': ringDevice.firmware})
+							keyValueList.append({'key': 'ringDeviceBatteryLevel', 'value': ringDevice.battery_life})
+							keyValueList.append({'key': 'ringDeviceVolume', 'value': ringDevice.volume})
+							keyValueList.append({'key': 'ringDeviceTimezone', 'value': ringDevice.timezone})
+							keyValueList.append({'key': 'ringDeviceWifiMACAddress', 'value': ringDevice.id})
+							keyValueList.append({'key': 'ringDeviceWifiNetwork', 'value': ringDevice.wifi_name})
+							keyValueList.append({'key': 'ringDeviceWifiSignalStrength',
+												 'value': ringDevice.wifi_signal_strength})
 
-							# Check for active alert; only applies to doorbot type Ring devices
+							# Check for an active alert (only applies to doorbot type Ring devices)
 							if ((ringDevice.family == "doorbots") and (ringDevice.check_alerts())):
 								# TODO: I don't think this Ring.com API call is per device - rather, global, so
 								#  doesn't make sense to call on each device, does it?
@@ -181,15 +183,12 @@ class Plugin(indigo.PluginBase):
 									# Alert active, so event time is now (approximately, within update frequency)
 									now = datetime.datetime.now(tz=pytz.utc)
 									stringifiedTime = datetime.datetime.strftime(now, self.dateFormatString)
-									# TODO: use a keyValueList to update states in one fell swoop, instead of one
-									#  at a time - see SDK sensor plugin example
-									handledAlertEventId = alert["id"]
-									indigoDevice.updateStateOnServer("lastEventTime", stringifiedTime)
-									indigoDevice.updateStateOnServer("lastEventId", alert["id"])
-									indigoDevice.updateStateOnServer("lastEventKind", alert["kind"])
+									keyValueList.append({'key': 'lastEventTime', 'value': stringifiedTime})
+									keyValueList.append({'key': 'lastEventId', 'value': alert["id"]})
+									keyValueList.append({'key': 'lastEventKind', 'value': alert["kind"]})
 
 									if (alert["kind"] == "ding"):
-										indigoDevice.updateStateOnServer("lastDoorbellPressTime", stringifiedTime)
+										keyValueList.append({'key': 'lastDoorbellPressTime', 'value': stringifiedTime})
 										
 										# Check for triggers we need to execute
 										for triggerId, trigger in sorted(self.activeButtonPushedTriggers.iteritems()):
@@ -198,14 +197,26 @@ class Plugin(indigo.PluginBase):
 													(triggerIndigoDeviceId == str(indigoDevice.id))):
 												indigo.trigger.execute(trigger)
 									elif (alert["kind"] == "motion"):
-										indigoDevice.updateStateOnServer("lastMotionTime", stringifiedTime)
-										indigoDevice.updateStateOnServer("onOffState", True)
-										indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
+										keyValueList.append({'key': 'lastMotionTime', 'value': stringifiedTime})
+										keyValueList.append({'key': 'onOffState', 'value': True})
+										indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.MotionSensorTripped)
+
+										# Check for triggers we need to execute
+										for triggerId, trigger in sorted(self.activeMotionDetectedTriggers.iteritems()):
+											triggerIndigoDeviceId = trigger.pluginProps.get("indigoDeviceId", "")
+											if ((triggerIndigoDeviceId == "-1") or
+													(triggerIndigoDeviceId == str(indigoDevice.id))):
+												indigo.trigger.execute(trigger)
 									else:
-										indigo.server.log("SHOULD NOT HAPPEN: Got an alert of kind %s, but didn't process it!" % alert["kind"], isError=True)
+										indigo.server.log("SHOULD NOT HAPPEN: Got an alert of kind %s, but didn't"
+														  " process it!" % alert["kind"], isError=True)
 								else:
-									indigo.server.log("SHOULD NOT HAPPEN: Got an alert for a different Ring device (%s) than the one we're updating (%s)!",
+									indigo.server.log("SHOULD NOT HAPPEN: Got an alert for a different Ring"
+													  " device (%s) than the one we're updating (%s)!" %
 													  (alert["doorbot_description"], ringDevice.name), isError=True)
+
+							# Push accumulated state updates to server before processing historical events
+							indigoDevice.updateStatesOnServer(keyValueList)
 
 							# Keep track of current state to enable processing event history below
 							indigoDeviceLastEventTime = datetime.datetime.strptime(
@@ -238,28 +249,37 @@ class Plugin(indigo.PluginBase):
 												  (indigoDevice.name, event["kind"]))
 									stringifiedTime = datetime.datetime.strftime(ringDeviceEventTime,
 																				 self.dateFormatString)
-
-									# TODO: use a keyValueList to update states in one fell swoop, instead of one
-									#  at a time - see SDK sensor plugin example
+									keyValueList = []
+									# Process event if it is newer
 									if (indigoDeviceLastEventTime < ringDeviceEventTime):
 										indigoDeviceLastEventTime = ringDeviceEventTime
-										indigoDevice.updateStateOnServer("lastEventTime", stringifiedTime)
-										indigoDevice.updateStateOnServer("lastEventId", event["id"])
-										indigoDevice.updateStateOnServer("lastEventKind", event["kind"])
+										keyValueList.append({'key': 'lastEventTime', 'value': stringifiedTime})
+										keyValueList.append({'key': 'lastEventId', 'value': event["id"]})
+										keyValueList.append({'key': 'lastEventKind', 'value': event["kind"]})
 
 									# Process motion and ding kinds to update
 									if (event["kind"] == 'motion'):
 										# If it was already handled as an alert, this code won't be reached
 										if (indigoDeviceLastMotionTime < ringDeviceEventTime):
 											indigoDeviceLastMotionTime = ringDeviceEventTime
-											indigoDevice.updateStateOnServer("lastMotionTime", stringifiedTime)
-											indigoDevice.updateStateOnServer("onOffState", True)
-											indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
+											keyValueList.append({'key': 'lastMotionTime', 'value': stringifiedTime})
+											keyValueList.append({'key': 'onOffState', 'value': True})
+											indigoDevice.updateStateImageOnServer(
+												indigo.kStateImageSel.MotionSensorTripped)
+
+											# Check for triggers we need to execute
+											for triggerId, trigger in sorted(
+													self.activeMotionDetectedTriggers.iteritems()):
+												triggerIndigoDeviceId = trigger.pluginProps.get("indigoDeviceId", "")
+												if ((triggerIndigoDeviceId == "-1") or
+														(triggerIndigoDeviceId == str(indigoDevice.id))):
+													indigo.trigger.execute(trigger)
 									elif (event["kind"] == 'ding'):
 										# If it was already handled as an alert, this code won't be reached
 										if (indigoDeviceLastDoorbellPressTime < ringDeviceEventTime):
 											indigoDeviceLastDoorbellPressTime = ringDeviceEventTime
-											indigoDevice.updateStateOnServer("lastDoorbellPressTime", stringifiedTime)
+											keyValueList.append(
+												{'key': 'lastDoorbellPressTime', 'value': stringifiedTime})
 
 											# Check for triggers we need to execute
 											for triggerId, trigger in sorted(
@@ -270,7 +290,11 @@ class Plugin(indigo.PluginBase):
 													indigo.trigger.execute(trigger)
 									# TODO: track on_demand event type?
 
-				# TODO Change to use a user specified update frequency; but, don't let it be less than 5 seconds.
+									# Push accumulated state updates to server
+									indigoDevice.updateStatesOnServer(keyValueList)
+
+				# TODO Change to use a user specified update frequency; but, don't let it be less than 5 seconds
+				#  or more than X (60?) seconds
 				self.sleep(5) # in seconds
 		except self.StopThread:
 			# Close connection to Ring API
@@ -389,11 +413,11 @@ class Plugin(indigo.PluginBase):
 	def deviceStartComm(self, indigoDevice):
 		# Called when communication with the hardware should be started.
 
-		# Initialize onOffState and state image
-		indigoDevice.updateStateOnServer("onOffState", False)
-		indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
+		# Initialize onOffState
+		keyValueList = []
+		keyValueList.append({'key': 'onOffState', 'value': False})
 
-		# Initialize device state for newly created Indigo devices
+		# Initialize device subModel for newly created Indigo devices
 		subModel = indigoDevice.pluginProps.get("selectedRingDeviceModel", "")
 		if indigoDevice.subModel != subModel:
 			indigoDevice.subModel = subModel
@@ -409,15 +433,19 @@ class Plugin(indigo.PluginBase):
 			second=0,
 			tzinfo=pytz.UTC)
 		stringifiedDistantPast = datetime.datetime.strftime(distantPast, self.dateFormatString)
-		# TODO: use a keyValueList to update states in one fell swoop, instead of one at a time
-		#  - see SDK sensor plugin example
+
 		if ((indigoDevice.states["lastEventTime"] is None) or (indigoDevice.states["lastEventTime"] == "")):
-			indigoDevice.updateStateOnServer("lastEventTime", stringifiedDistantPast)
+			keyValueList.append({'key': 'lastEventTime', 'value': stringifiedDistantPast})
 		if ((indigoDevice.states["lastDoorbellPressTime"] is None) or
 				(indigoDevice.states["lastDoorbellPressTime"] == "")):
-			indigoDevice.updateStateOnServer("lastDoorbellPressTime", stringifiedDistantPast)
+			keyValueList.append({'key': 'lastDoorbellPressTime', 'value': stringifiedDistantPast})
 		if ((indigoDevice.states["lastMotionTime"] is None) or (indigoDevice.states["lastMotionTime"] == "")):
-			indigoDevice.updateStateOnServer("lastMotionTime", stringifiedDistantPast)
+			keyValueList.append({'key': 'lastMotionTime', 'value': stringifiedDistantPast})
+
+		# Push accumulated state initialization to server, and initialize state image
+		indigoDevice.updateStatesOnServer(keyValueList)
+		indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.MotionSensor)
+
 
 
 	########################################
@@ -466,7 +494,8 @@ class Plugin(indigo.PluginBase):
 	####################
 	def currentMappedPlusUnmappedRingDevices(self, filter, valuesDict, typeId, targetId):
 		# TODO: change to make use of filter to pick device type to iterate over
-		self.debugLog(u"Finding currently mapped Ring doorbell device and ones that are not yet mapped to Indigo devices")
+		self.debugLog(u"Finding currently mapped Ring doorbell device and ones that are not yet mapped "
+					  u"to Indigo devices")
 		currentMappedPlusUnmappedRingDevicesList = []
 
 		if self.isConnected():
@@ -531,6 +560,8 @@ class Plugin(indigo.PluginBase):
 	def triggerStartProcessing(self, trigger):
 		if trigger.pluginTypeId == "doorbellButtonPushedEvent":
 			self.activeButtonPushedTriggers[trigger.id] = trigger
+		elif trigger.pluginTypeId == "motionDetectedEvent":
+			self.activeMotionDetectedTriggers[trigger.id] = trigger
 		elif trigger.pluginTypeId == "videoDownloadCompleteEvent":
 			self.activeDownloadCompleteTriggers[trigger.id] = trigger
 
@@ -539,6 +570,8 @@ class Plugin(indigo.PluginBase):
 	def triggerStopProcessing(self, trigger):
 		if trigger.pluginTypeId == "doorbellButtonPushedEvent":
 			del self.activeButtonPushedTriggers[trigger.id]
+		elif trigger.pluginTypeId == "motionDetectedEvent":
+			del self.activeMotionDetectedTriggers[trigger.id]
 		elif trigger.pluginTypeId == "videoDownloadCompleteEvent":
 			del self.activeDownloadCompleteTriggers[trigger.id]
 
