@@ -327,7 +327,9 @@ class Plugin(indigo.PluginBase):
 			return (False, valuesDict, errorDict)
 		except CustomOAuth2Error as exception:
 			if (exception.error == u'error requesting 2fa service to send code'):
-				errorString = u"Error asking Ring.com 2FA service to send a verification code; limited to ten requests every ten minutes"
+				errorString = u"Error asking Ring.com 2FA service to send a verification code;" \
+							  u" limited to ten requests every ten minutes, and if you make too many requests with an" \
+							  u" invalid code, you'll need to wait 24 hours before trying again"
 				indigo.server.log(errorString, isError=True)
 				valuesDict["showLoginErrorField"] = "true"
 				valuesDict["showAuthCodeField"] = "false"
