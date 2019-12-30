@@ -94,6 +94,7 @@ class Plugin(indigo.PluginBase):
 	def closeConnectionToRing(self):
 		if ((self.ring is not None) and (self.ring.is_connected is True)):
 			self.ring.session.close()
+			self.ring.is_connected = False
 
 
 	########################################
@@ -315,6 +316,7 @@ class Plugin(indigo.PluginBase):
 			username = valuesDict.get("username", None)
 			password = valuesDict.get("password", None)
 			_clean_cache(CACHE_FILE)
+			self.closeConnectionToRing()
 			self.makeConnectionToRing(username, password)
 		except MissingTokenError:
 			self.debugLog(u"We need a valid 2FA verification code")
