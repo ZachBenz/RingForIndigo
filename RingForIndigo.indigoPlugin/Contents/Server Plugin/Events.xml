@@ -11,6 +11,16 @@
             </Field>
         </ConfigUI>
     </Event>
+    <Event id="motionDetectedEvent">
+        <Name>Motion Detected</Name>
+        <ConfigUI>
+            <SupportURL>https://forums.indigodomo.com/viewforum.php?f=323</SupportURL>
+            <Field id="indigoDeviceId" type="menu">
+                <Label>Select which device to monitor for event:</Label>
+                <List class="self" filter="doorbell" method="listIndigoDevices" dynamicReload="true"/>
+            </Field>
+        </ConfigUI>
+    </Event>
     <Event id="videoDownloadCompleteEvent">
         <Name>Video Download Complete</Name>
         <ConfigUI>

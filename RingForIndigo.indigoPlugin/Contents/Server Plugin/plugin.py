@@ -6,9 +6,9 @@
 
 import indigo
 
-import os
-import sys
-import time
+# import os
+# import sys
+# import time
 import requests
 import datetime
 import pytz
@@ -27,6 +27,7 @@ class Plugin(indigo.PluginBase):
 		self.ring = None
 		self.dateFormatString = '%Y-%m-%d %H:%M:%S %Z'   # TODO: Really a constant, move to a const.py or equivalent
 		self.activeButtonPushedTriggers = {}
+		self.activeMotionDetectedTriggers = {}
 		self.activeDownloadCompleteTriggers = {}
 		# TODO: Initialize some tables mapping Indigo devices to Ring devices to make lookups more efficient?
 
@@ -103,6 +104,7 @@ class Plugin(indigo.PluginBase):
 	def runConcurrentThread(self):
 		try:
 			while True:
+				# Check to see if our connection to the Ring.com API is up
 				self.debugLog(u"Connected to Ring.com API?: %s" % (self.isConnected()))
 				if (self.isConnected() is False):
 					# Connection is not currently up, attempt to establish connection
@@ -157,7 +159,6 @@ class Plugin(indigo.PluginBase):
 									stringifiedTime = datetime.datetime.strftime(now, self.dateFormatString)
 									# TODO: use a keyValueList to update states in one fell swoop, instead of one
 									#  at a time - see SDK sensor plugin example
-									handledAlertEventId = alert["id"]
 									indigoDevice.updateStateOnServer("lastEventTime", stringifiedTime)
 									indigoDevice.updateStateOnServer("lastEventId", alert["id"])
 									indigoDevice.updateStateOnServer("lastEventKind", alert["kind"])
@@ -175,6 +176,13 @@ class Plugin(indigo.PluginBase):
 										indigoDevice.updateStateOnServer("lastMotionTime", stringifiedTime)
 										indigoDevice.updateStateOnServer("onOffState", True)
 										indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
+
+										# Check for triggers we need to execute
+										for triggerId, trigger in sorted(self.activeMotionDetectedTriggers.iteritems()):
+											triggerIndigoDeviceId = trigger.pluginProps.get("indigoDeviceId", "")
+											if ((triggerIndigoDeviceId == "-1") or
+													(triggerIndigoDeviceId == str(indigoDevice.id))):
+												indigo.trigger.execute(trigger)
 									else:
 										indigo.server.log("SHOULD NOT HAPPEN: Got an alert of kind %s, but didn't process it!" % alert["kind"], isError=True)
 								else:
@@ -229,6 +237,14 @@ class Plugin(indigo.PluginBase):
 											indigoDevice.updateStateOnServer("lastMotionTime", stringifiedTime)
 											indigoDevice.updateStateOnServer("onOffState", True)
 											indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
+
+											# Check for triggers we need to execute
+											for triggerId, trigger in sorted(
+													self.activeMotionDetectedTriggers.iteritems()):
+												triggerIndigoDeviceId = trigger.pluginProps.get("indigoDeviceId", "")
+												if ((triggerIndigoDeviceId == "-1") or
+														(triggerIndigoDeviceId == str(indigoDevice.id))):
+													indigo.trigger.execute(trigger)
 									elif (event["kind"] == 'ding'):
 										# If it was already handled as an alert, this code won't be reached
 										if (indigoDeviceLastDoorbellPressTime < ringDeviceEventTime):
@@ -473,6 +489,8 @@ class Plugin(indigo.PluginBase):
 	def triggerStartProcessing(self, trigger):
 		if trigger.pluginTypeId == "doorbellButtonPushedEvent":
 			self.activeButtonPushedTriggers[trigger.id] = trigger
+		elif trigger.pluginTypeId == "motionDetectedEvent":
+			self.activeMotionDetectedTriggers[trigger.id] = trigger
 		elif trigger.pluginTypeId == "videoDownloadCompleteEvent":
 			self.activeDownloadCompleteTriggers[trigger.id] = trigger
 
@@ -481,6 +499,8 @@ class Plugin(indigo.PluginBase):
 	def triggerStopProcessing(self, trigger):
 		if trigger.pluginTypeId == "doorbellButtonPushedEvent":
 			del self.activeButtonPushedTriggers[trigger.id]
+		elif trigger.pluginTypeId == "motionDetectedEvent":
+			del self.activeMotionDetectedTriggers[trigger.id]
 		elif trigger.pluginTypeId == "videoDownloadCompleteEvent":
 			del self.activeDownloadCompleteTriggers[trigger.id]
 
