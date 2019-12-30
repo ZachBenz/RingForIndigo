@@ -26,6 +26,7 @@ class Plugin(indigo.PluginBase):
 		self.debug = pluginPrefs.get(u"printDebugInEventLog", False)
 		self.ring = None
 		self.dateFormatString = '%Y-%m-%d %H:%M:%S %Z'   # TODO: Really a constant, move to a const.py or equivalent
+		self.activeButtonPushedTriggers = {}
 		self.activeDownloadCompleteTriggers = {}
 		# TODO: Initialize some tables mapping Indigo devices to Ring devices to make lookups more efficient?
 
@@ -182,6 +183,18 @@ class Plugin(indigo.PluginBase):
 											indigoDeviceLastDoorbellPressTime = ringDeviceEventTime
 											indigoDevice.updateStateOnServer("lastDoorbellPressTime", stringifiedTime)
 
+											# Check for triggers we need to execute
+											for triggerId, trigger in sorted(
+													self.activeButtonPushedTriggers.iteritems()):
+												triggerIndigoDeviceId = trigger.pluginProps.get("indigoDeviceId", "")
+												if ((triggerIndigoDeviceId == "-1") or (
+														triggerIndigoDeviceId == str(indigoDevice.id))):
+													triggerOnlyIfAnswered = \
+														trigger.pluginProps.get("triggerOnlyIfAnswered", False)
+													if ((triggerOnlyIfAnswered is False) or
+															((triggerOnlyIfAnswered is True) and (event["answered"] is True))):
+														indigo.trigger.execute(trigger)
+
 									# TODO: track on_demand event type?
 
 				# TODO Change to use a user specified update frequency
@@ -259,6 +272,11 @@ class Plugin(indigo.PluginBase):
 
 	########################################
 	def validateEventConfigUi(self, valuesDict, typeId, eventId):
+		errorDict = indigo.Dict()
+		if (valuesDict["indigoDeviceId"] == ""):
+			errorDict["indigoDeviceId"] = "You must specify an Indigo device to monitor for events"
+		if (len(errorDict) > 0):
+			return (False, valuesDict, errorDict)
 		return True
 
 
@@ -392,22 +410,31 @@ class Plugin(indigo.PluginBase):
 	# Actions defined in Events.xml:
 	####################
 	def listIndigoDevices(self, filter, valuesDict, typeId, targetId):
-		deviceList = [("-1","Any Ring device you have defined in Indigo")]
+		deviceList = [("-1", "Any Ring %s device you have defined in Indigo" % filter)]
+		if (filter == ''):
+			deviceList = [("-1","Any Ring device you have defined in Indigo")]
+
 		for indigoDevice in indigo.devices.iter("self"):
-			deviceList.append((indigoDevice.id, indigoDevice.name))
+			if (filter == '') or (indigoDevice.deviceTypeId == filter):
+				deviceList.append((indigoDevice.id, indigoDevice.name))
 		return deviceList
+
 
 	########################################
 	# Keep track of subscribed triggers
 	####################
 	def triggerStartProcessing(self, trigger):
-		if trigger.pluginTypeId == "videoDownloadCompleteEvent":
+		if trigger.pluginTypeId == "doorbellButtonPushedEvent":
+			self.activeButtonPushedTriggers[trigger.id] = trigger
+		elif trigger.pluginTypeId == "videoDownloadCompleteEvent":
 			self.activeDownloadCompleteTriggers[trigger.id] = trigger
 
 
 	########################################
 	def triggerStopProcessing(self, trigger):
-		if trigger.pluginTypeId == "videoDownloadCompleteEvent":
+		if trigger.pluginTypeId == "doorbellButtonPushedEvent":
+			del self.activeButtonPushedTriggers[trigger.id]
+		elif trigger.pluginTypeId == "videoDownloadCompleteEvent":
 			del self.activeDownloadCompleteTriggers[trigger.id]
 
 

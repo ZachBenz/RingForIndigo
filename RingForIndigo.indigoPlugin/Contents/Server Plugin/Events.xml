@@ -1,6 +1,20 @@
 <?xml version="1.0"?>
 <Events>
     <SupportURL>https://forums.indigodomo.com/viewforum.php?f=323</SupportURL>
+    <Event id="doorbellButtonPushedEvent">
+        <Name>Doorbell Button Pushed</Name>
+        <ConfigUI>
+            <SupportURL>https://forums.indigodomo.com/viewforum.php?f=323</SupportURL>
+            <Field id="indigoDeviceId" type="menu">
+                <Label>Select which device to monitor for event:</Label>
+                <List class="self" filter="doorbell" method="listIndigoDevices" dynamicReload="true"/>
+            </Field>
+            <Field type="checkbox" id="triggerOnlyIfAnswered"
+		        tooltip="Only trigger on doorbell button pushes where someone 'answers' (starts viewing video) in the Ring app">
+		        <Label>Only trigger if button push is 'answered':</Label>
+            </Field>
+        </ConfigUI>
+    </Event>
     <Event id="videoDownloadCompleteEvent">
         <Name>Video Download Complete</Name>
         <ConfigUI>
