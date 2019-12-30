@@ -128,6 +128,7 @@ class Plugin(indigo.PluginBase):
 						if (indigoDevice is not None):
 							# Get latest state and events for Ring device
 							ringDevice.update()
+
 							# TODO: use a keyValueList to update states in one fell swoop, instead of one at a time
 							#  - see SDK sensor plugin example
 							indigoDevice.updateStateOnServer("ringDeviceName", ringDevice.name)
@@ -144,6 +145,43 @@ class Plugin(indigo.PluginBase):
 							indigoDevice.updateStateOnServer("ringDeviceWifiSignalStrength",
 															 ringDevice.wifi_signal_strength)
 
+							# Check for active alert; only applies to doorbot type Ring devices
+							if ((ringDevice.family == "doorbots") and (ringDevice.check_alerts())):
+								# TODO: I don't think this Ring.com API call is per device - rather, global, so
+								#  doesn't make sense to call on each device, does it?
+								alert = ringDevice.alert
+								self.debugLog("Processing an active %s alert" % (alert["kind"]))
+								if (ringDevice.account_id == alert["doorbot_id"]):
+									# Alert active, so event time is now (approximately, within update frequency)
+									now = datetime.datetime.now(tz=pytz.utc)
+									stringifiedTime = datetime.datetime.strftime(now, self.dateFormatString)
+									# TODO: use a keyValueList to update states in one fell swoop, instead of one
+									#  at a time - see SDK sensor plugin example
+									handledAlertEventId = alert["id"]
+									indigoDevice.updateStateOnServer("lastEventTime", stringifiedTime)
+									indigoDevice.updateStateOnServer("lastEventId", alert["id"])
+									indigoDevice.updateStateOnServer("lastEventKind", alert["kind"])
+
+									if (alert["kind"] == "ding"):
+										indigoDevice.updateStateOnServer("lastDoorbellPressTime", stringifiedTime)
+										
+										# Check for triggers we need to execute
+										for triggerId, trigger in sorted(self.activeButtonPushedTriggers.iteritems()):
+											triggerIndigoDeviceId = trigger.pluginProps.get("indigoDeviceId", "")
+											if ((triggerIndigoDeviceId == "-1") or
+													(triggerIndigoDeviceId == str(indigoDevice.id))):
+												indigo.trigger.execute(trigger)
+									elif (alert["kind"] == "motion"):
+										indigoDevice.updateStateOnServer("lastMotionTime", stringifiedTime)
+										indigoDevice.updateStateOnServer("onOffState", True)
+										indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
+									else:
+										indigo.server.log("SHOULD NOT HAPPEN: Got an alert of kind %s, but didn't process it!" % alert["kind"], isError=True)
+								else:
+									indigo.server.log("SHOULD NOT HAPPEN: Got an alert for a different Ring device (%s) than the one we're updating (%s)!",
+													  (alert["doorbot_description"], ringDevice.name), isError=True)
+
+							# Keep track of current state to enable processing event history below
 							indigoDeviceLastEventTime = datetime.datetime.strptime(
 								indigoDevice.states["lastEventTime"], self.dateFormatString).replace(tzinfo=pytz.UTC)
 							indigoDeviceLastDoorbellPressTime = datetime.datetime.strptime(
@@ -151,34 +189,48 @@ class Plugin(indigo.PluginBase):
 								self.dateFormatString).replace(tzinfo=pytz.UTC)
 							indigoDeviceLastMotionTime = datetime.datetime.strptime(
 								indigoDevice.states["lastMotionTime"], self.dateFormatString).replace(tzinfo=pytz.UTC)
-							indigoDevicePreviousMostRecentEvent = indigoDeviceLastEventTime
+							indigoDevicePreviousMostRecentEventTime = indigoDeviceLastEventTime
+							indigoDevicePreviousMostRecentEventId = indigoDevice.states["lastEventId"]
 
 							# TODO: Make history limit a heuristic, multiplicative factor of update (sleep) frequency
+							# Check for events we haven't processed in history, including things we missed as alerts
 							for event in ringDevice.history(limit=10):
+								# Skip over event if we already handled it previously
+								if (str(event["id"]) == str(indigoDevicePreviousMostRecentEventId)):
+									# TODO: What if we missed both a motion a ding alert occurred, but only later
+									#  show up in event history - won't we only skip over one of them, resulting
+									#  in double processing of the other?
+									self.debugLog("Ignoring %s event, already handled it previously" % event["kind"])
+									continue
+
 								ringDeviceEventTime = \
 									event["created_at"].astimezone(pytz.utc)
-								isNewEventToProcess =  indigoDevicePreviousMostRecentEvent < ringDeviceEventTime
+								# Process _all_ events newer than the last one we saw last update cycle
+								isNewEventToProcess =  indigoDevicePreviousMostRecentEventTime < ringDeviceEventTime
 								if isNewEventToProcess:
-									self.debugLog("Processing a new event for %s: %s, answered: %s" %
-												  (indigoDevice.name, event["kind"], event["answered"]))
+									self.debugLog("Processing a new event for %s: %s" %
+												  (indigoDevice.name, event["kind"]))
 									stringifiedTime = datetime.datetime.strftime(ringDeviceEventTime,
 																				 self.dateFormatString)
 
+									# TODO: use a keyValueList to update states in one fell swoop, instead of one
+									#  at a time - see SDK sensor plugin example
 									if (indigoDeviceLastEventTime < ringDeviceEventTime):
 										indigoDeviceLastEventTime = ringDeviceEventTime
 										indigoDevice.updateStateOnServer("lastEventTime", stringifiedTime)
 										indigoDevice.updateStateOnServer("lastEventId", event["id"])
 										indigoDevice.updateStateOnServer("lastEventKind", event["kind"])
-										indigoDevice.updateStateOnServer("wasLastEventAnswered", event["answered"])
 
+									# Process motion and ding kinds to update
 									if (event["kind"] == 'motion'):
+										# If it was already handled as an alert, this code won't be reached
 										if (indigoDeviceLastMotionTime < ringDeviceEventTime):
 											indigoDeviceLastMotionTime = ringDeviceEventTime
 											indigoDevice.updateStateOnServer("lastMotionTime", stringifiedTime)
 											indigoDevice.updateStateOnServer("onOffState", True)
 											indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
-
 									elif (event["kind"] == 'ding'):
+										# If it was already handled as an alert, this code won't be reached
 										if (indigoDeviceLastDoorbellPressTime < ringDeviceEventTime):
 											indigoDeviceLastDoorbellPressTime = ringDeviceEventTime
 											indigoDevice.updateStateOnServer("lastDoorbellPressTime", stringifiedTime)
@@ -189,16 +241,11 @@ class Plugin(indigo.PluginBase):
 												triggerIndigoDeviceId = trigger.pluginProps.get("indigoDeviceId", "")
 												if ((triggerIndigoDeviceId == "-1") or (
 														triggerIndigoDeviceId == str(indigoDevice.id))):
-													triggerOnlyIfAnswered = \
-														trigger.pluginProps.get("triggerOnlyIfAnswered", False)
-													if ((triggerOnlyIfAnswered is False) or
-															((triggerOnlyIfAnswered is True) and (event["answered"] is True))):
-														indigo.trigger.execute(trigger)
-
+													indigo.trigger.execute(trigger)
 									# TODO: track on_demand event type?
 
-				# TODO Change to use a user specified update frequency
-				self.sleep(10) # in seconds
+				# TODO Change to use a user specified update frequency; but, don't let it be less than 5 seconds.
+				self.sleep(5) # in seconds
 		except self.StopThread:
 			# Close connection to Ring API
 			self.closeConnectionToRing()

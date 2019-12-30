@@ -169,11 +169,6 @@
 				<TriggerLabel>Ring.com Event Time</TriggerLabel>
 				<ControlPageLabel>Ring.com Event Time</ControlPageLabel>
 			</State>
-			<State id="wasLastEventAnswered">
-				<ValueType>Boolean</ValueType>
-				<TriggerLabel>Was the Last Event Answered in Ring App</TriggerLabel>
-				<ControlPageLabel>Was the Last Event Answered in Ring App</ControlPageLabel>
-			</State>
 			<State id="lastMotionTime">
 				<ValueType>String</ValueType>
 				<TriggerLabel>Last Motion Time</TriggerLabel>
