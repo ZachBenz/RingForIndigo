@@ -186,7 +186,7 @@ class Plugin(indigo.PluginBase):
 														  " process it!" % alert["kind"], isError=True)
 								else:
 									indigo.server.log("SHOULD NOT HAPPEN: Got an alert for a different Ring"
-													  " device (%s) than the one we're updating (%s)!",
+													  " device (%s) than the one we're updating (%s)!" %
 													  (alert["doorbot_description"], ringDevice.name), isError=True)
 
 							# Push accumulated state updates to server before processing historical events
