@@ -121,7 +121,7 @@ class Plugin(indigo.PluginBase):
 					# TODO: Consider having a different update frequency for clearing motion sensed state
 					for indigoDevice in indigo.devices.iter("self.doorbell"):
 						indigoDevice.updateStateOnServer("onOffState", False)
-						indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
+						indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.MotionSensor)
 
 					# Doorbells
 					for ringDevice in self.ring.doorbells:
@@ -175,7 +175,7 @@ class Plugin(indigo.PluginBase):
 									elif (alert["kind"] == "motion"):
 										indigoDevice.updateStateOnServer("lastMotionTime", stringifiedTime)
 										indigoDevice.updateStateOnServer("onOffState", True)
-										indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
+										indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.MotionSensorTripped)
 
 										# Check for triggers we need to execute
 										for triggerId, trigger in sorted(self.activeMotionDetectedTriggers.iteritems()):
@@ -236,7 +236,7 @@ class Plugin(indigo.PluginBase):
 											indigoDeviceLastMotionTime = ringDeviceEventTime
 											indigoDevice.updateStateOnServer("lastMotionTime", stringifiedTime)
 											indigoDevice.updateStateOnServer("onOffState", True)
-											indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorTripped)
+											indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.MotionSensorTripped)
 
 											# Check for triggers we need to execute
 											for triggerId, trigger in sorted(
@@ -349,7 +349,7 @@ class Plugin(indigo.PluginBase):
 
 		# Initialize onOffState and state image
 		indigoDevice.updateStateOnServer("onOffState", False)
-		indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
+		indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.MotionSensor)
 
 		# Initialize device state for newly created Indigo devices
 		subModel = indigoDevice.pluginProps.get("selectedRingDeviceModel", "")
