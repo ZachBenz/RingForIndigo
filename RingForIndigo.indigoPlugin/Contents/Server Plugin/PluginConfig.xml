@@ -6,17 +6,32 @@
 	Might need to add to label: "Note that secondary accounts cannot access Ring Chime devices."
 	-->
 	<Field id="twoFactorInfoLabel" type="label" fontSize="small" fontColor="darkgray">
-		<Label>The (unofficial) Ring.com API doesn't currently support two-factor authentication. As an alternative, you can add an authorized secondary account for Indigo to connect with, allowing you to enable two-factor authentication on your primary account.</Label>
+		<Label>If you have Two Factor Authentication enabled on your Ring.com account, you will be prompted to enter a verification code when you click Save.</Label>
 	</Field>
-	<Field type="textfield" id="username" tooltip="Ring.com Username" visibleBindingValue="true">
+	<Field type="textfield" id="username" tooltip="Ring.com Username">
 		<Label>Ring.com Username:</Label>
 	</Field>
-	<Field type="textfield" id="password" secure="true" tooltip="Ring.com Password" visibleBindingValue="true">
+	<Field type="textfield" id="password" secure="true" tooltip="Ring.com Password">
 		<Label>Ring.com Password:</Label>
+	</Field>
+	<Field type="checkbox" id="showAuthCodeField" hidden="true" defaultValue="false">
+		<Label>HIDDEN, SHOULD NOT DISPLAY; Whether or not authorizationCode field is visible</Label>
+	</Field>
+	<Field type="textfield" id="authorizationCode" tooltip="Ring.com two-factor verification code" visibleBindingId="showAuthCodeField" visibleBindingValue="true">
+		<Label>Two-Factor Verification Code:</Label>
 	</Field>
 	<Field id="simpleSeparatorPluginConfig" type="separator"/>
 	<Field type="checkbox" id="printDebugInEventLog"
 		tooltip="Display detailed debugging messages in the Indigo Event Log">
 		<Label>Print plugin's debug messages to Indigo Event Log:</Label>
+	</Field>
+	<Field type="checkbox" id="showLoginErrorField" hidden="true" defaultValue="false">
+		<Label>HIDDEN, SHOULD NOT DISPLAY; Whether or not loginErrorMessage field is visible</Label>
+	</Field>
+	<Field type="label" id="loginErrorMessage" fontColor="red"  fontSize="small" visibleBindingId="showLoginErrorField" visibleBindingValue="true">
+		<Label>Error occurred during login (hover over this to see error details)</Label>
+	</Field>
+	<Field id="takeUpSpaceForDynamicResizingKludge" type="label" >
+		<Label></Label>
 	</Field>
 </PluginConfig>
