@@ -6,16 +6,14 @@
 
 import indigo
 
-# import os
-# import sys
-# import time
-import requests
 import datetime
 import pytz
+import requests
+import subprocess
+from ring_doorbell import Ring
 from oauthlib.oauth2.rfc6749.errors import MissingTokenError, CustomOAuth2Error
 from ring_doorbell.utils import _clean_cache
 from ring_doorbell.const import CACHE_FILE
-from ring_doorbell import Ring
 
 # Note the "indigo" module is automatically imported and made available inside
 # our global name space by the host process.
@@ -473,6 +471,17 @@ class Plugin(indigo.PluginBase):
 			if (ringDevice.recording_download(eventId, filename, override=True)):
 				# Download succeeded
 				self.debugLog(u"Downloaded video of event for '%s' to %s" % (indigoDevice.name, filename))
+
+				# Create animated GIF, if requested
+				if (pluginAction.props.get('convertToAnimatedGIF', False)):
+					self.debugLog("Attempting to convert video to animated GIF")
+					gifFilename = filename + ".gif"
+					returnCode = subprocess.call("./ffmpeg -i %s -s 600x400 -pix_fmt rgb8 -r 1 -f gif - "
+												 "| ./gifsicle --optimize=3 --delay=20 > %s" %
+												 (filename, gifFilename), shell=True)
+					self.debugLog("Return code from attempting to convert video to animated GIF: %s" % returnCode)
+					if (returnCode is not 0):
+						indigo.server.log(u"Error converting downloaded video to animated GIF", isError=True)
 
 				# Check for triggers we need to execute
 				for triggerId, trigger in sorted(self.activeDownloadCompleteTriggers.iteritems()):

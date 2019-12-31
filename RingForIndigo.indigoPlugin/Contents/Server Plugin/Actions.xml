@@ -20,6 +20,17 @@
 				<Label>Event ID (e.g. 5513546390316394328):</Label>
 				<Description>Event ID to download video for on this device</Description>
 			</Field>
+			<Field id="simpleSeparatorDownloadVideoConfig" type="separator"/>
+			<Field id="animatedGIFInfoLabel" type="label" fontSize="small" fontColor="darkgray">
+				<Label>An animated GIF will be given the same filename as the .mp4 file, with .gif appended to the end (e.g. ringVideo.mp4.gif)</Label>
+			</Field>
+			<Field type="checkbox" id="convertToAnimatedGIF"
+				tooltip="Optionally create an animated GIF of the downloaded video">
+				<Label>Create animated GIF:</Label>
+			</Field>
+			<Field id="takeUpSpaceForDynamicResizingKludge2" type="label">
+				<Label></Label>
+			</Field>
 		</ConfigUI>
 	</Action>
 </Actions>
