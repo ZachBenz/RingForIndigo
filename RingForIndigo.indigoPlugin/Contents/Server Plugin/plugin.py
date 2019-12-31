@@ -11,6 +11,9 @@ import pytz
 import requests
 import subprocess
 from ring_doorbell import Ring
+from oauthlib.oauth2.rfc6749.errors import MissingTokenError, CustomOAuth2Error
+from ring_doorbell.utils import _clean_cache
+from ring_doorbell.const import CACHE_FILE
 
 # Note the "indigo" module is automatically imported and made available inside
 # our global name space by the host process.
@@ -27,6 +30,8 @@ class Plugin(indigo.PluginBase):
 		self.activeButtonPushedTriggers = {}
 		self.activeMotionDetectedTriggers = {}
 		self.activeDownloadCompleteTriggers = {}
+		self.twoFactorAuthorizationCode = ""
+		self.twoFactorRequestLimiterEngaged = False
 		# TODO: Initialize some tables mapping Indigo devices to Ring devices to make lookups more efficient?
 
 
@@ -46,6 +51,10 @@ class Plugin(indigo.PluginBase):
 		self.debugLog(u"Shutdown called")
 
 
+	def twoFactorAuthorizationCallback(self):
+		self.debugLog("Ring.com API is asking for a two factor authentication code")
+		return self.twoFactorAuthorizationCode
+
 	########################################
 	def makeConnectionToRing(self, username, password):
 		# Validate username and password
@@ -62,7 +71,7 @@ class Plugin(indigo.PluginBase):
 		# Attempt to connect
 		try:
 			self.debugLog(u"Attempting to connect to Ring.com API and login as %s" % username)
-			self.ring = Ring(username, password)
+			self.ring = Ring(username, password, self.twoFactorAuthorizationCallback)
 		except requests.exceptions.HTTPError as exception:
 			self.debugLog(u"Caught HTTPError in startup: %s" % (exception))
 			if (exception.response.status_code == 401):
@@ -84,6 +93,7 @@ class Plugin(indigo.PluginBase):
 	def closeConnectionToRing(self):
 		if ((self.ring is not None) and (self.ring.is_connected is True)):
 			self.ring.session.close()
+			self.ring.is_connected = False
 
 
 	########################################
@@ -106,10 +116,26 @@ class Plugin(indigo.PluginBase):
 				self.debugLog(u"Connected to Ring.com API?: %s" % (self.isConnected()))
 				if (self.isConnected() is False):
 					# Connection is not currently up, attempt to establish connection
-					if (('username' in self.pluginPrefs) and ('password' in self.pluginPrefs)):
-						self.makeConnectionToRing(self.pluginPrefs['username'], self.pluginPrefs['password'])
+					if (self.twoFactorRequestLimiterEngaged == False):
+						if (('username' in self.pluginPrefs) and ('password' in self.pluginPrefs)):
+							try:
+								self.makeConnectionToRing(self.pluginPrefs['username'], self.pluginPrefs['password'])
+							except (MissingTokenError, CustomOAuth2Error):
+								indigo.server.log(
+									u"Two-factor verification code needed - please go to Ring plugin's 'Configure...' menu",
+									isError=True)
+
+								# Avoid exhausting allowed requests for 2FA code (10 requests per 10 minutes)
+								# Limited can only be disabled by successfully saving updating plugin preferences
+								self.twoFactorRequestLimiterEngaged = True
+						else:
+							self.debugLog(u"pluginPrefs do not yet have username and/or password field")
 					else:
-						self.debugLog(u"pluginPrefs do not yet have username and/or password field")
+						self.sleep(30)
+						indigo.server.log(
+							u"Two-factor verification code needed - please go to Ring plugin's 'Configure...' menu",
+							isError=True)
+
 
 				# If we are connected, update events and device status (otherwise, wait until after sleep to try again)
 				if (self.isConnected() is True):
@@ -209,7 +235,7 @@ class Plugin(indigo.PluginBase):
 									# TODO: What if we missed both a motion a ding alert occurred, but only later
 									#  show up in event history - won't we only skip over one of them, resulting
 									#  in double processing of the other?
-									self.debugLog("Ignoring %s event, already handled it previously" % event["kind"])
+									self.debugLog("Ignoring %s event, already handled it (lastEventId)" % event["kind"])
 									continue
 
 								ringDeviceEventTime = \
@@ -301,17 +327,49 @@ class Plugin(indigo.PluginBase):
 			errorDict["username"] = "You must specify a username (e.g. janedoe@gmail.com)"
 		if ((valuesDict["password"] is None) or (valuesDict["password"] == "")):
 			errorDict["password"] = \
-				"You must specify a password (sadly, two-factor authentication is not currently supported)"
+				"You must specify a password"
 		if (len(errorDict) > 0):
 			return (False, valuesDict, errorDict)
 
+		self.twoFactorAuthorizationCode = valuesDict.get(u"authorizationCode", "")
+
 		# Update connection to Ring API based on changes to credentials
-		# TODO: Do we really want to do this in the validate function... is there another callback method that
-		#  should do it in?
-		self.makeConnectionToRing(valuesDict.get("username", None), valuesDict.get("password", None))
+		try:
+			username = valuesDict.get("username", None)
+			password = valuesDict.get("password", None)
+			_clean_cache(CACHE_FILE)
+			self.closeConnectionToRing()
+			self.makeConnectionToRing(username, password)
+		except MissingTokenError:
+			self.debugLog(u"We need a valid 2FA verification code")
+			valuesDict["showLoginErrorField"] = "false"
+			valuesDict["showAuthCodeField"] = "true"
+			valuesDict["authorizationCode"] = ""
+			errorDict["authorizationCode"] = "Please enter the two-factor verification code sent to you by Ring"
+			return (False, valuesDict, errorDict)
+		except CustomOAuth2Error as exception:
+			if (exception.error == u'error requesting 2fa service to send code'):
+				errorString = u"Error asking Ring.com 2FA service to send a verification code;" \
+							  u" limited to ten requests every ten minutes, and if you make too many requests with an" \
+							  u" invalid code, you'll need to wait 24 hours before trying again"
+				indigo.server.log(errorString, isError=True)
+				valuesDict["showLoginErrorField"] = "true"
+				valuesDict["showAuthCodeField"] = "false"
+				valuesDict["authorizationCode"] = ""
+				errorDict["loginErrorMessage"] = errorString
+				return (False, valuesDict, errorDict)
+			else:
+				errorString = u"Unhandled CustomOAuth2Error: %s" % exception.error
+				indigo.server.log(errorString, isError=True)
+				valuesDict["showLoginErrorField"] = "true"
+				valuesDict["showAuthCodeField"] = "false"
+				valuesDict["authorizationCode"] = ""
+				errorDict["loginErrorMessage"] = errorString
+				return (False, valuesDict, errorDict)
 
 		# PluginPrefs will be updated AFTER we exit this method if we say validation was good
 		self.debugLog(u"Validated plugin configuration changes")
+		self.twoFactorRequestLimiterEngaged = False
 		return True
 
 
