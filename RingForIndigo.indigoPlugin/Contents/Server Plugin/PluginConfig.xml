@@ -1,12 +1,8 @@
 <?xml version="1.0"?>
 <PluginConfig>
 	<SupportURL>https://forums.indigodomo.com/viewforum.php?f=323</SupportURL>
-	<!--	TODO: Still figuring out how much a secondary account can/can't do... seems like no chimes, at the least...
-	or perhaps has to do with the User-Agent used to connect?  Hard to say
-	Might need to add to label: "Note that secondary accounts cannot access Ring Chime devices."
-	-->
-	<Field id="twoFactorInfoLabel" type="label" fontSize="small" fontColor="darkgray">
-		<Label>If you have Two Factor Authentication enabled on your Ring.com account, you will be prompted to enter a verification code when you click Save.</Label>
+	<Field id="secondaryAccountInfoLabel" type="label" fontSize="small" fontColor="darkgray">
+		<Label>It is STRONGLY recommended that you create a secondary account on Ring for Indigo to use; even if you enable two-factor authentication on the secondary account, be sure to give it a complex password that you don't use anywhere else.</Label>
 	</Field>
 	<Field type="textfield" id="username" tooltip="Ring.com Username">
 		<Label>Ring.com Username:</Label>
@@ -14,24 +10,36 @@
 	<Field type="textfield" id="password" secure="true" tooltip="Ring.com Password">
 		<Label>Ring.com Password:</Label>
 	</Field>
+	<Field id="twoFactorInfoLabel" type="label" fontSize="small" fontColor="darkgray">
+		<Label>If you have Two Factor Authentication enabled on your Ring.com account, you will be prompted to enter a verification code, if needed, when you click Save.</Label>
+	</Field>
 	<Field type="checkbox" id="showAuthCodeField" hidden="true" defaultValue="false">
 		<Label>HIDDEN, SHOULD NOT DISPLAY; Whether or not authorizationCode field is visible</Label>
 	</Field>
 	<Field type="textfield" id="authorizationCode" tooltip="Ring.com two-factor verification code" visibleBindingId="showAuthCodeField" visibleBindingValue="true">
 		<Label>Two-Factor Verification Code:</Label>
 	</Field>
+	<Field type="label" id="loginErrorMessage" fontColor="red" visibleBindingId="showLoginErrorField" visibleBindingValue="true">
+		<Label>Error occurred during login (hover mouse over this text to see error details)</Label>
+	</Field>
 	<Field id="simpleSeparatorPluginConfig" type="separator"/>
 	<Field type="checkbox" id="printDebugInEventLog"
 		tooltip="Display detailed debugging messages in the Indigo Event Log">
-		<Label>Print plugin's debug messages to Indigo Event Log:</Label>
+		<Label>Print Ring plugin's debug messages to Indigo Event Log:</Label>
 	</Field>
 	<Field type="checkbox" id="showLoginErrorField" hidden="true" defaultValue="false">
 		<Label>HIDDEN, SHOULD NOT DISPLAY; Whether or not loginErrorMessage field is visible</Label>
 	</Field>
-	<Field type="label" id="loginErrorMessage" fontColor="red"  fontSize="small" visibleBindingId="showLoginErrorField" visibleBindingValue="true">
-		<Label>Error occurred during login (hover over this to see error details)</Label>
+	<Field id="twoFactorWarningTitleLabel" type="label" fontColor="red">
+		<Label>WARNING for Two-Factor Authentication:</Label>
+	</Field>
+	<Field id="twoFactorWarningLabel" type="label" fontColor="blue">
+		<Label>Two-factor authentication support is experimental.  It has gone through some testing, but if you use it, please know that you face the risk of being frozen out of your Ring account for 24 hours or more.  Please report any problems you encounter in the Support Forum (click the "?" icon below).</Label>
 	</Field>
 	<Field id="takeUpSpaceForDynamicResizingKludge" type="label" >
+		<Label></Label>
+	</Field>
+	<Field id="takeUpSpaceForDynamicResizingKludge2" type="label" >
 		<Label></Label>
 	</Field>
 </PluginConfig>
