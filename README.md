@@ -1,5 +1,5 @@
 # RingForIndigo
-Ring plugin for Indigo Home Automation Server from Indigo Domotics
+Ring plugin for Indigo Home Automation Server from [Indigo Domotics](https://www.indigodomo.com)
 
 # Recommendaded Ring Account Configuration
 
