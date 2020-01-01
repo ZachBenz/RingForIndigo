@@ -28,7 +28,7 @@
 				tooltip="Optionally create an animated GIF of the downloaded video">
 				<Label>Create animated GIF:</Label>
 			</Field>
-			<Field id="takeUpSpaceForDynamicResizingKludge2" type="label">
+			<Field id="takeUpSpaceForDynamicResizingKludge3" type="label">
 				<Label></Label>
 			</Field>
 		</ConfigUI>

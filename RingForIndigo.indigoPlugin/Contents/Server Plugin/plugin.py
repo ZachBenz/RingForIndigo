@@ -11,7 +11,7 @@ import pytz
 import requests
 import subprocess
 from ring_doorbell import Ring
-from oauthlib.oauth2.rfc6749.errors import MissingTokenError, CustomOAuth2Error
+from oauthlib.oauth2.rfc6749.errors import AccessDeniedError, InvalidGrantError, MissingTokenError, CustomOAuth2Error
 from ring_doorbell.utils import _clean_cache
 from ring_doorbell.const import CACHE_FILE
 
@@ -31,7 +31,7 @@ class Plugin(indigo.PluginBase):
 		self.activeMotionDetectedTriggers = {}
 		self.activeDownloadCompleteTriggers = {}
 		self.twoFactorAuthorizationCode = ""
-		self.twoFactorRequestLimiterEngaged = False
+		self.loginLimiterEngaged = False
 		# TODO: Initialize some tables mapping Indigo devices to Ring devices to make lookups more efficient?
 
 
@@ -116,26 +116,51 @@ class Plugin(indigo.PluginBase):
 				self.debugLog(u"Connected to Ring.com API?: %s" % (self.isConnected()))
 				if (self.isConnected() is False):
 					# Connection is not currently up, attempt to establish connection
-					if (self.twoFactorRequestLimiterEngaged == False):
+					if (self.loginLimiterEngaged == False):
 						if (('username' in self.pluginPrefs) and ('password' in self.pluginPrefs)):
 							try:
 								self.makeConnectionToRing(self.pluginPrefs['username'], self.pluginPrefs['password'])
-							except (MissingTokenError, CustomOAuth2Error):
-								indigo.server.log(
-									u"Two-factor verification code needed - please go to Ring plugin's 'Configure...' menu",
+							except (AccessDeniedError, MissingTokenError, InvalidGrantError, CustomOAuth2Error)\
+									as loginException:
+								self.debugLog("Error logging in: %s" % loginException.error)
+								indigo.server.log(u"Login error - please go to the Ring plugin's 'Configure...'"
+												  u" menu to update credentials",
 									isError=True)
 
-								# Avoid exhausting allowed requests for 2FA code (10 requests per 10 minutes)
-								# Limited can only be disabled by successfully saving updating plugin preferences
-								self.twoFactorRequestLimiterEngaged = True
+								# Avoid exhausting allowed requests for 2FA code (10 requests per 10 minutes) or
+								# any other freeze-outs due to login errors
+								# Limiter can only be disabled by successfully saving updating plugin preferences
+								self.loginLimiterEngaged = True
+							except Exception as unknownException:
+								self.debugLog("Unrecognized exception encountered while logging in: %s:" %
+											  unknownException)
+								indigo.server.log(u"Login error - please go to the Ring plugin's 'Configure...'"
+												  u" menu to update credentials",
+												  isError=True)
+								# Avoid exhausting allowed requests for 2FA code (10 requests per 10 minutes) or
+								# any other freeze-outs due to login errors
+								# Limiter can only be disabled by successfully saving updating plugin preferences
+								self.loginLimiterEngaged = True
+							except:
+								self.debugLog("Unrecognized error encountered while logging in")
+								indigo.server.log(u"Login error - please go to the Ring plugin's 'Configure...'"
+												  u" menu to update credentials",
+												  isError=True)
+								# Avoid exhausting allowed requests for 2FA code (10 requests per 10 minutes) or
+								# any other freeze-outs due to login errors
+								# Limiter can only be disabled by successfully saving updating plugin preferences
+								self.loginLimiterEngaged = True
 						else:
 							self.debugLog(u"pluginPrefs do not yet have username and/or password field")
+							indigo.serverLog(u"Incomplete login credentials provided - please visit the Ring plugin's"
+											 u" 'Configure...' menu")
 					else:
+						# Sleep for 30 seconds while we wait for the user to resolve the error
 						self.sleep(30)
+						self.debugLog("User has yet to resolve login error by visiting Configure menu")
 						indigo.server.log(
-							u"Two-factor verification code needed - please go to Ring plugin's 'Configure...' menu",
+							u"Login error - please go to the Ring plugin's 'Configure...' menu to update credentials",
 							isError=True)
-
 
 				# If we are connected, update events and device status (otherwise, wait until after sleep to try again)
 				if (self.isConnected() is True):
@@ -293,7 +318,7 @@ class Plugin(indigo.PluginBase):
 
 				# TODO Change to use a user specified update frequency; but, don't let it be less than 5 seconds
 				#  or more than X (60?) seconds
-				self.sleep(5) # in seconds
+				self.sleep(7) # in seconds
 		except self.StopThread:
 			# Close connection to Ring API
 			self.closeConnectionToRing()
@@ -333,25 +358,39 @@ class Plugin(indigo.PluginBase):
 
 		self.twoFactorAuthorizationCode = valuesDict.get(u"authorizationCode", "")
 
-		# Update connection to Ring API based on changes to credentials
+		# Update connection to Ring API based on any changes to credentials entered in PrefsConfigUi by user
 		try:
 			username = valuesDict.get("username", None)
 			password = valuesDict.get("password", None)
-			_clean_cache(CACHE_FILE)
+
+			# Only clean the cache file (discard existing auth token) if the username and/or password have changed
+			currentUsername = ""
+			currentPassword = ""
+			if ('username' in self.pluginPrefs):
+				currentUsername = self.pluginPrefs['username']
+			if ('password' in self.pluginPrefs):
+				currentPassword = self.pluginPrefs['password']
+			if ((username != currentUsername) or (password != currentPassword)):
+				self.debugLog("Username and/or password setting changed; discarding any existing authorization token")
+				_clean_cache(CACHE_FILE)
+
 			self.closeConnectionToRing()
 			self.makeConnectionToRing(username, password)
-		except MissingTokenError:
-			self.debugLog(u"We need a valid 2FA verification code")
-			valuesDict["showLoginErrorField"] = "false"
-			valuesDict["showAuthCodeField"] = "true"
-			valuesDict["authorizationCode"] = ""
-			errorDict["authorizationCode"] = "Please enter the two-factor verification code sent to you by Ring"
-			return (False, valuesDict, errorDict)
-		except CustomOAuth2Error as exception:
-			if (exception.error == u'error requesting 2fa service to send code'):
-				errorString = u"Error asking Ring.com 2FA service to send a verification code;" \
-							  u" limited to ten requests every ten minutes, and if you make too many requests with an" \
-							  u" invalid code, you'll need to wait 24 hours before trying again"
+		except AccessDeniedError as accessException:
+			self.debugLog("AccessDeniedError: %s" % accessException.error)
+			if (accessException.error == u'invalid user credentials'):
+				errorString = u"Invalid user credentials"
+				indigo.server.log(errorString, isError=True)
+				valuesDict["showLoginErrorField"] = "true"
+				valuesDict["showAuthCodeField"] = "false"
+				valuesDict["authorizationCode"] = ""
+				errorDict["username"] = errorString
+				errorDict["loginErrorMessage"] = errorString
+				return (False, valuesDict, errorDict)
+			if (accessException.error == u'token is invalid or does not exists'):
+				# Clean the cache file (discard existing auth token) because token invalid/missing
+				_clean_cache(CACHE_FILE)
+				errorString = u"Cached authorization token was invalid, and has been deleted; please try again"
 				indigo.server.log(errorString, isError=True)
 				valuesDict["showLoginErrorField"] = "true"
 				valuesDict["showAuthCodeField"] = "false"
@@ -359,18 +398,92 @@ class Plugin(indigo.PluginBase):
 				errorDict["loginErrorMessage"] = errorString
 				return (False, valuesDict, errorDict)
 			else:
-				errorString = u"Unhandled CustomOAuth2Error: %s" % exception.error
+				errorString = u"Unhandled AccessDeniedError: %s" % accessException.error
+				indigo.server.log(errorString, isError=True)
+				valuesDict["showLoginErrorField"] = "true"
+				valuesDict["showAuthCodeField"] = "false"
+				valuesDict["authorizationCode"] = ""
+				errorDict["username"] = errorString
+				errorDict["password"] = errorString
+				errorDict["loginErrorMessage"] = errorString
+				return (False, valuesDict, errorDict)
+		except InvalidGrantError as invalidGrantException:
+			self.debugLog("InvalidGrantError: %s" % invalidGrantException.error)
+			# Clean the cache file (discard existing auth token) because token invalid/missing
+			_clean_cache(CACHE_FILE)
+			errorString = u"Authorization token was invalid, and has been deleted; please try again"
+			indigo.server.log(errorString, isError=True)
+			valuesDict["showLoginErrorField"] = "true"
+			valuesDict["showAuthCodeField"] = "false"
+			valuesDict["authorizationCode"] = ""
+			errorDict["loginErrorMessage"] = errorString
+			return (False, valuesDict, errorDict)
+		except MissingTokenError as missingTokenException:
+			self.debugLog("MissingTokenError: %s" % missingTokenException.error)
+			valuesDict["showLoginErrorField"] = "false"
+			valuesDict["showAuthCodeField"] = "true"
+			valuesDict["authorizationCode"] = ""
+			errorDict["authorizationCode"] = "Please enter the two-factor verification code sent to you by Ring"
+			return (False, valuesDict, errorDict)
+		except CustomOAuth2Error as oauthException:
+			self.debugLog("CustomOAuth2Error: %s" % oauthException.error)
+			if (oauthException.error == u'error requesting 2fa service to send code'):
+				errorString = u"Error asking Ring.com 2FA service to send a verification code;" \
+							  u" limited to ten requests every ten minutes, and if you make too many login attempts" \
+							  u" with an invalid code, you'll need to wait 24 hours before trying again (try logging" \
+							  u" into you account on the ring.com website for a more specific error message)"
 				indigo.server.log(errorString, isError=True)
 				valuesDict["showLoginErrorField"] = "true"
 				valuesDict["showAuthCodeField"] = "false"
 				valuesDict["authorizationCode"] = ""
 				errorDict["loginErrorMessage"] = errorString
 				return (False, valuesDict, errorDict)
+			elif (oauthException.error == u'Verification Code is invalid or expired'):
+				errorString = u"Verification Code is invalid or expired, please enter the new one just" \
+							  u" sent to you by Ring"
+				indigo.server.log(errorString, isError=True)
+				valuesDict["showLoginErrorField"] = "true"
+				valuesDict["showAuthCodeField"] = "true"
+				valuesDict["authorizationCode"] = ""
+				errorDict["authorizationCode"] = errorString
+				errorDict["loginErrorMessage"] = errorString
+				return (False, valuesDict, errorDict)
+			else:
+				errorString = u"Unhandled CustomOAuth2Error: %s" % oauthException.error
+				indigo.server.log(errorString, isError=True)
+				valuesDict["showLoginErrorField"] = "true"
+				valuesDict["showAuthCodeField"] = "false"
+				valuesDict["authorizationCode"] = ""
+				errorDict["loginErrorMessage"] = errorString
+				return (False, valuesDict, errorDict)
+		except Exception as unknownException:
+			self.debugLog("Unhandled exception: %s" % unknownException.error)
+			errorString = u"Unhandled exception: %s" % unknownException.error
+			indigo.server.log(errorString, isError=True)
+			valuesDict["showLoginErrorField"] = "true"
+			valuesDict["showAuthCodeField"] = "false"
+			valuesDict["authorizationCode"] = ""
+			errorDict["loginErrorMessage"] = errorString
+			return (False, valuesDict, errorDict)
+		except:
+			errorString = u"SHOULD NEVER HAPPEN: Unexpected error, contact developer"
+			self.debugLog(errorString)
+			indigo.server.log(errorString, isError=True)
+			valuesDict["showLoginErrorField"] = "true"
+			valuesDict["showAuthCodeField"] = "false"
+			valuesDict["authorizationCode"] = ""
+			errorDict["loginErrorMessage"] = errorString
+			return (False, valuesDict, errorDict)
 
 		# PluginPrefs will be updated AFTER we exit this method if we say validation was good
 		self.debugLog(u"Validated plugin configuration changes")
-		self.twoFactorRequestLimiterEngaged = False
-		return True
+		self.loginLimiterEngaged = False
+
+		# Successful, so reset prefsConfigUi state
+		valuesDict["showLoginErrorField"] = "false"
+		valuesDict["showAuthCodeField"] = "false"
+		valuesDict["authorizationCode"] = ""
+		return (True, valuesDict)
 
 
 	# ########################################
