@@ -155,8 +155,8 @@ class Plugin(indigo.PluginBase):
 							indigo.serverLog(u"Incomplete login credentials provided - please visit the Ring plugin's"
 											 u" 'Configure...' menu")
 					else:
-						# Sleep for a minute while we wait for the user to resolve the error
-						self.sleep(60)
+						# Sleep for 30 seconds while we wait for the user to resolve the error
+						self.sleep(30)
 						self.debugLog("User has yet to resolve login error by visiting Configure menu")
 						indigo.server.log(
 							u"Login error - please go to the Ring plugin's 'Configure...' menu to update credentials",
@@ -318,7 +318,7 @@ class Plugin(indigo.PluginBase):
 
 				# TODO Change to use a user specified update frequency; but, don't let it be less than 5 seconds
 				#  or more than X (60?) seconds
-				self.sleep(5) # in seconds
+				self.sleep(7) # in seconds
 		except self.StopThread:
 			# Close connection to Ring API
 			self.closeConnectionToRing()
