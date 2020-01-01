@@ -231,10 +231,10 @@ class Plugin(indigo.PluginBase):
 													(triggerIndigoDeviceId == str(indigoDevice.id))):
 												indigo.trigger.execute(trigger)
 									else:
-										indigo.server.log("SHOULD NOT HAPPEN: Got an alert of kind %s, but didn't"
+										self.debugLog("SHOULD NOT HAPPEN: Got an alert of kind %s, but didn't"
 														  " process it!" % alert["kind"], isError=True)
 								else:
-									indigo.server.log("SHOULD NOT HAPPEN: Got an alert for a different Ring"
+									self.debugLog("SHOULD NOT HAPPEN: Got an alert for a different Ring"
 													  " device (%s) than the one we're updating (%s)!" %
 													  (alert["doorbot_description"], ringDevice.name), isError=True)
 

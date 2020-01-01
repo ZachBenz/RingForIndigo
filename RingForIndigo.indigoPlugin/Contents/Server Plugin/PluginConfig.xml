@@ -2,7 +2,7 @@
 <PluginConfig>
 	<SupportURL>https://forums.indigodomo.com/viewforum.php?f=323</SupportURL>
 	<Field id="secondaryAccountInfoLabel" type="label" fontSize="small" fontColor="darkgray">
-		<Label>It is STRONGLY recommended that you create a secondary account on Ring for Indigo to use; even if you enable two-factor authentication on the secondary account, be sure to give it a complex password that you don't use anywhere else.</Label>
+		<Label>It is STRONGLY recommended that you create a secondary account on Ring for Indigo to use. Whether or not you enable two-factor authentication on the secondary account, be sure to give that account a complex password that you don't use anywhere else, for maximum security.</Label>
 	</Field>
 	<Field type="textfield" id="username" tooltip="Ring.com Username">
 		<Label>Ring.com Username:</Label>
