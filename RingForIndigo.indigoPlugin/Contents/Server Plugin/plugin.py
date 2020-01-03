@@ -8,7 +8,6 @@ import indigo
 
 import datetime
 import pytz
-import requests
 import subprocess
 from requests import ConnectionError, HTTPError
 from ring_doorbell import Ring
