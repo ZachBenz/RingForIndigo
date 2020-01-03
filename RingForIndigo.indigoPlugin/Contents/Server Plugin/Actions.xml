@@ -11,7 +11,10 @@
 			<Field id="eventIdOption" type="menu" defaultValue="lastEventId" tooltip="Optionally manually specify the Event ID to download video for on this device.">
 				<Label>Event to download video for:</Label>
 				<List>
-					<Option value="lastEventId">Last Event for Device</Option>
+					<Option value="lastEventId">Last Event of Any Kind for Device</Option>
+					<Option value="lastMotionEventId">Last Motion Event for Device</Option>
+					<Option value="lastDoorbellPressEventId">Last Doorbell Press Event for Device</Option>
+					<Option value="lastOnDemandEventId">Last On Demand Access Event for Device</Option>
 					<Option value="specifyEventId">Specify Event ID Manually</Option>
 				</List>
 			</Field>

@@ -169,17 +169,61 @@
 				<TriggerLabel>Ring.com Event Time</TriggerLabel>
 				<ControlPageLabel>Ring.com Event Time</ControlPageLabel>
 			</State>
+			<State id="timeSinceLastEventShortString">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Short String Time Since Last Event</TriggerLabel>
+				<ControlPageLabel>Short String Time Since Last Event</ControlPageLabel>
+			</State>
+
+			<State id="lastMotionEventId">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Ring.com Motion Event Id</TriggerLabel>
+				<ControlPageLabel>Ring.com Motion Event Id</ControlPageLabel>
+			</State>
 			<State id="lastMotionTime">
 				<ValueType>String</ValueType>
 				<TriggerLabel>Last Motion Time</TriggerLabel>
 				<ControlPageLabel>Last Motion Time</ControlPageLabel>
+			</State>
+			<State id="timeSinceLastMotionShortString">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Short String Time Since Last Motion</TriggerLabel>
+				<ControlPageLabel>Short String Time Since Last Motion</ControlPageLabel>
+			</State>
+
+			<State id="lastDoorbellPressEventId">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Ring.com Doorbell Press Event Id</TriggerLabel>
+				<ControlPageLabel>Ring.com Doorbell Press Event Id</ControlPageLabel>
 			</State>
 			<State id="lastDoorbellPressTime">
 				<ValueType>String</ValueType>
 				<TriggerLabel>Last Doorbell Press Time</TriggerLabel>
 				<ControlPageLabel>Last Doorbell Press Time</ControlPageLabel>
 			</State>
+			<State id="timeSinceLastDoorbellPressShortString">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Short String Time Since Last Doorbell Press</TriggerLabel>
+				<ControlPageLabel>Short String Time Since Last Doorbell Press</ControlPageLabel>
+			</State>
+
+			<State id="lastOnDemandEventId">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Ring.com On Demand Access Event Id</TriggerLabel>
+				<ControlPageLabel>Ring.com On Demand Access Event Id</ControlPageLabel>
+			</State>
+			<State id="lastOnDemandTime">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Last On Demand Access Time</TriggerLabel>
+				<ControlPageLabel>Last On Demand Access Time</ControlPageLabel>
+			</State>
+			<State id="timeSinceLastOnDemandShortString">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Short String Time Since Last On Demand Access</TriggerLabel>
+				<ControlPageLabel>Short String Time Since Last On Demand Access</ControlPageLabel>
+			</State>
 		</States>
+		<!-- TODO: Is this really what we want the default display state to be?  Overridden by deviceStartComm... -->
 		<UiDisplayStateId>ringDeviceWifiSignalStrength</UiDisplayStateId>
 	</Device>
 

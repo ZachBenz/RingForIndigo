@@ -29,10 +29,11 @@ class Plugin(indigo.PluginBase):
 		self.dateFormatString = '%Y-%m-%d %H:%M:%S %Z'   # TODO: Really a constant, move to a const.py or equivalent?
 		self.activeButtonPushedTriggers = {}
 		self.activeMotionDetectedTriggers = {}
+		self.activeOnDemandAccessTriggers = {}
 		self.activeDownloadCompleteTriggers = {}
 		self.twoFactorAuthorizationCode = ""
 		self.loginLimiterEngaged = False
-		self.maxUpdateRetries = 5    # TODO: Make this user configurable?
+		self.maxUpdateRetries = 5    # TODO: Make this user configurable?  Also, a constant -> const.py?
 		self.currentUpdateRetries = 0
 		# TODO: Initialize some tables mapping Indigo devices to Ring devices to make lookups more efficient?
 
@@ -116,7 +117,7 @@ class Plugin(indigo.PluginBase):
 								self.makeConnectionToRing(self.pluginPrefs['username'], self.pluginPrefs['password'])
 							except (ConnectionError, HTTPError, AccessDeniedError, MissingTokenError, InvalidGrantError,
 									CustomOAuth2Error) as loginException:
-								self.debugLog("Error logging in: %s" % loginException.error)
+								self.debugLog("Error logging in: %s" % repr(loginException))
 								indigo.server.log(u"Login error - please go to the Ring plugin's 'Configure...'"
 												  u" menu to update credentials",
 									isError=True)
@@ -127,7 +128,7 @@ class Plugin(indigo.PluginBase):
 								self.loginLimiterEngaged = True
 							except Exception as unknownException:
 								self.debugLog("Unrecognized exception encountered while logging in: %s:" %
-											  unknownException)
+											  repr(unknownException))
 								indigo.server.log(u"Login error - please go to the Ring plugin's 'Configure...'"
 												  u" menu to update credentials",
 												  isError=True)
@@ -160,10 +161,37 @@ class Plugin(indigo.PluginBase):
 				if (self.isConnected() is True):
 					self.debugLog(u"Getting events and device states from Ring.com API")
 
-					# Go through and clear motion sensed on all devices each update cycle
-					# TODO: Consider having a different update frequency for clearing motion sensed state
+					# Go through to a) update time since short string and b) clear motion sensed on all Indigo devices
+					# each update cycle
+					# TODO: Consider having a different update frequency for clearing motion sensed state and for
+					#  updating time since short strings?
+					# Doorbells
 					for indigoDevice in indigo.devices.iter("self.doorbell"):
-						indigoDevice.updateStateOnServer("onOffState", False)
+						keyValueList = []
+
+						indigoDeviceLastEventTime = datetime.datetime.strptime(
+							indigoDevice.states["lastEventTime"], self.dateFormatString).replace(tzinfo=pytz.UTC)
+						keyValueList.append({'key': 'timeSinceLastEventShortString',
+											 'value': self.getTimeSinceShortString(indigoDeviceLastEventTime)})
+
+						indigoDeviceLastMotionTime = datetime.datetime.strptime(
+							indigoDevice.states["lastMotionTime"], self.dateFormatString).replace(tzinfo=pytz.UTC)
+						keyValueList.append({'key': 'timeSinceLastMotionShortString',
+											 'value': self.getTimeSinceShortString(indigoDeviceLastMotionTime)})
+
+						indigoDeviceLastDoorbellPressTime = datetime.datetime.strptime(
+							indigoDevice.states["lastDoorbellPressTime"],
+							self.dateFormatString).replace(tzinfo=pytz.UTC)
+						keyValueList.append({'key': 'timeSinceLastDoorbellPressShortString',
+											 'value': self.getTimeSinceShortString(indigoDeviceLastDoorbellPressTime)})
+
+						indigoDeviceLastOnDemandTime = datetime.datetime.strptime(
+							indigoDevice.states["lastOnDemandTime"], self.dateFormatString).replace(tzinfo=pytz.UTC)
+						keyValueList.append({'key': 'timeSinceLastOnDemandShortString',
+											 'value': self.getTimeSinceShortString(indigoDeviceLastOnDemandTime)})
+
+						keyValueList.append({'key': 'onOffState', 'value': False})
+						indigoDevice.updateStatesOnServer(keyValueList)
 						indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.MotionSensor)
 
 					# Doorbells
@@ -198,25 +226,17 @@ class Plugin(indigo.PluginBase):
 								self.debugLog("Processing an active %s alert" % (alert["kind"]))
 								if (ringDevice.account_id == alert["doorbot_id"]):
 									# Alert active, so event time is now (approximately, within update frequency)
+									# TODO: Possible to get actual alert time from API call response?
 									now = datetime.datetime.now(tz=pytz.utc)
 									stringifiedTime = datetime.datetime.strftime(now, self.dateFormatString)
 									keyValueList.append({'key': 'lastEventTime', 'value': stringifiedTime})
 									keyValueList.append({'key': 'lastEventId', 'value': alert["id"]})
 									keyValueList.append({'key': 'lastEventKind', 'value': alert["kind"]})
 
-									if (alert["kind"] == "ding"):
-										indigo.server.log("%s doorbell button pushed" % ringDevice.name)
-										keyValueList.append({'key': 'lastDoorbellPressTime', 'value': stringifiedTime})
-										
-										# Check for triggers we need to execute
-										for triggerId, trigger in sorted(self.activeButtonPushedTriggers.iteritems()):
-											triggerIndigoDeviceId = trigger.pluginProps.get("indigoDeviceId", "")
-											if ((triggerIndigoDeviceId == "-1") or
-													(triggerIndigoDeviceId == str(indigoDevice.id))):
-												indigo.trigger.execute(trigger)
-									elif (alert["kind"] == "motion"):
+									if (alert["kind"] == "motion"):
 										indigo.server.log("%s motion detected" % ringDevice.name)
 										keyValueList.append({'key': 'lastMotionTime', 'value': stringifiedTime})
+										keyValueList.append({'key': 'lastMotionEventId', 'value': alert["id"]})
 										keyValueList.append({'key': 'onOffState', 'value': True})
 										indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.MotionSensorTripped)
 
@@ -226,13 +246,24 @@ class Plugin(indigo.PluginBase):
 											if ((triggerIndigoDeviceId == "-1") or
 													(triggerIndigoDeviceId == str(indigoDevice.id))):
 												indigo.trigger.execute(trigger)
+									elif (alert["kind"] == "ding"):
+										indigo.server.log("%s doorbell button pushed" % ringDevice.name)
+										keyValueList.append({'key': 'lastDoorbellPressTime', 'value': stringifiedTime})
+										keyValueList.append({'key': 'lastDoorbellPressEventId', 'value': alert["id"]})
+
+										# Check for triggers we need to execute
+										for triggerId, trigger in sorted(self.activeButtonPushedTriggers.iteritems()):
+											triggerIndigoDeviceId = trigger.pluginProps.get("indigoDeviceId", "")
+											if ((triggerIndigoDeviceId == "-1") or
+													(triggerIndigoDeviceId == str(indigoDevice.id))):
+												indigo.trigger.execute(trigger)
 									else:
 										self.debugLog("SHOULD NOT HAPPEN: Got an alert of kind %s, but didn't"
-														  " process it!" % alert["kind"], isError=True)
+														  " process it!" % alert["kind"])
 								else:
 									self.debugLog("SHOULD NOT HAPPEN: Got an alert for a different Ring"
 													  " device (%s) than the one we're updating (%s)!" %
-													  (alert["doorbot_description"], ringDevice.name), isError=True)
+													  (alert["doorbot_description"], ringDevice.name))
 
 							# Push accumulated state updates to server before processing historical events
 							indigoDevice.updateStatesOnServer(keyValueList)
@@ -245,16 +276,20 @@ class Plugin(indigo.PluginBase):
 								self.dateFormatString).replace(tzinfo=pytz.UTC)
 							indigoDeviceLastMotionTime = datetime.datetime.strptime(
 								indigoDevice.states["lastMotionTime"], self.dateFormatString).replace(tzinfo=pytz.UTC)
+							indigoDeviceLastOnDemandTime = datetime.datetime.strptime(
+								indigoDevice.states["lastOnDemandTime"], self.dateFormatString).replace(tzinfo=pytz.UTC)
+
+							# Keep track of state of things as of end of last update cycle
 							indigoDevicePreviousMostRecentEventTime = indigoDeviceLastEventTime
 							indigoDevicePreviousMostRecentEventId = indigoDevice.states["lastEventId"]
 
-							# TODO: Make history limit a heuristic, multiplicative factor of update (sleep) frequency
+							# TODO: Make history limit a heuristic, multiplicative factor of update (sleep) frequency?
 							# Check for events we haven't processed in history, including things we missed as alerts
 							for event in ringDevice.history(limit=10):
 								# Skip over event if we already handled it previously
 								if (str(event["id"]) == str(indigoDevicePreviousMostRecentEventId)):
-									# TODO: What if we missed both a motion a ding alert occurred, but only later
-									#  show up in event history - won't we only skip over one of them, resulting
+									# TODO: What if we missed both a motion and a ding alert occurring that only later
+									#  show up in event history - won't we only skip over one of them here, resulting
 									#  in double processing of the other?
 									self.debugLog("Ignoring %s event, already handled it (lastEventId)" % event["kind"])
 									continue
@@ -276,7 +311,7 @@ class Plugin(indigo.PluginBase):
 										keyValueList.append({'key': 'lastEventId', 'value': event["id"]})
 										keyValueList.append({'key': 'lastEventKind', 'value': event["kind"]})
 
-									# Process motion and ding kinds to update
+									# Process additional state based on event type
 									if (event["kind"] == 'motion'):
 										indigo.server.log("%s motion detected" % ringDevice.name)
 
@@ -284,6 +319,7 @@ class Plugin(indigo.PluginBase):
 										if (indigoDeviceLastMotionTime < ringDeviceEventTime):
 											indigoDeviceLastMotionTime = ringDeviceEventTime
 											keyValueList.append({'key': 'lastMotionTime', 'value': stringifiedTime})
+											keyValueList.append({'key': 'lastMotionEventId', 'value': event["id"]})
 											keyValueList.append({'key': 'onOffState', 'value': True})
 											indigoDevice.updateStateImageOnServer(
 												indigo.kStateImageSel.MotionSensorTripped)
@@ -303,6 +339,8 @@ class Plugin(indigo.PluginBase):
 											indigoDeviceLastDoorbellPressTime = ringDeviceEventTime
 											keyValueList.append(
 												{'key': 'lastDoorbellPressTime', 'value': stringifiedTime})
+											keyValueList.append(
+												{'key': 'lastDoorbellPressEventId', 'value': event["id"]})
 
 											# Check for triggers we need to execute
 											for triggerId, trigger in sorted(
@@ -311,13 +349,31 @@ class Plugin(indigo.PluginBase):
 												if ((triggerIndigoDeviceId == "-1") or (
 														triggerIndigoDeviceId == str(indigoDevice.id))):
 													indigo.trigger.execute(trigger)
-									# TODO: track on_demand event type?
+									elif (event["kind"] == 'on_demand'):
+										indigo.server.log("%s accessed on demand by a Ring user" % ringDevice.name)
+
+										# If it was already handled as an alert, this code won't be reached
+										if (indigoDeviceLastOnDemandTime < ringDeviceEventTime):
+											indigoDeviceLastOnDemandTime = ringDeviceEventTime
+											keyValueList.append(
+												{'key': 'lastOnDemandTime', 'value': stringifiedTime})
+											keyValueList.append(
+												{'key': 'lastOnDemandEventId', 'value': event["id"]})
+
+											# Check for triggers we need to execute
+											for triggerId, trigger in sorted(
+													self.activeOnDemandAccessTriggers.iteritems()):
+												triggerIndigoDeviceId = trigger.pluginProps.get("indigoDeviceId", "")
+												if ((triggerIndigoDeviceId == "-1") or (
+														triggerIndigoDeviceId == str(indigoDevice.id))):
+													indigo.trigger.execute(trigger)
 
 									# Push accumulated state updates to server
 									indigoDevice.updateStatesOnServer(keyValueList)
 
 				# TODO Change to use a user specified update frequency; but, don't let it be less than 5 seconds
-				#  or more than X (60?) seconds
+				#  or more than X (60?) seconds (has implications for timing assumptions above, e.g. clearing motion
+				#  state and how quickly we process alerts vs. capture later as historical events)
 				self.currentUpdateRetries = 0
 				self.sleep(7) # in seconds
 		except self.StopThread:
@@ -326,7 +382,7 @@ class Plugin(indigo.PluginBase):
 			pass
 		except Exception as updateException:
 			# Handle any exception generically as a connection failure to be re-attempted after a pause
-			self.debugLog("Error while trying to update devices from Ring.com API: %s" % updateException.error)
+			self.debugLog("Error while trying to update devices from Ring.com API: %s" % repr(updateException))
 			if (self.currentUpdateRetries >= self.maxUpdateRetries):
 				indigo.server.log(u"Maximum retries reached - please go to the Ring plugin's 'Configure...'"
 								  u" menu to update credentials",
@@ -337,7 +393,8 @@ class Plugin(indigo.PluginBase):
 				self.currentUpdateRetries = 0
 			else:
 				# Take a break for 30 seconds before retrying
-				indigo.server.log(u"Connection error - pausing for 30 seconds before retrying", isError=True)
+				indigo.server.log(u"Connection error - pausing for 30 seconds before retrying (error: %s)" %
+								  str(updateException), isError=True)
 				self.currentUpdateRetries += 1
 				self.sleep(30)    # TODO: Make this a user configurable time?
 
@@ -355,7 +412,7 @@ class Plugin(indigo.PluginBase):
 			indigo.server.log(u"Connection to Ring.com API down; can't print devices to Event Log")
 
 		indigo.server.log(u"")
-		indigo.server.log(u"Done printing available Ring devices to Event Log")
+		indigo.server.log(u"Done printing all available Ring devices to Event Log")
 		return
 
 
@@ -394,8 +451,8 @@ class Plugin(indigo.PluginBase):
 			self.closeConnectionToRing()
 			self.makeConnectionToRing(username, password)
 		except ConnectionError as connectionException:
-			self.debugLog("HTTPError: %s" % connectionException.error)
-			errorString = connectionException.error
+			self.debugLog("HTTPError: %s" % repr(connectionException))
+			errorString = str(connectionException)
 			indigo.server.log(errorString, isError=True)
 			valuesDict["showLoginErrorField"] = "true"
 			valuesDict["showAuthCodeField"] = "false"
@@ -404,8 +461,8 @@ class Plugin(indigo.PluginBase):
 			errorDict["loginErrorMessage"] = errorString
 			return (False, valuesDict, errorDict)
 		except HTTPError as httpErrorException:
-			self.debugLog("HTTPError: %s" % httpErrorException.error)
-			errorString = httpErrorException.error
+			self.debugLog("HTTPError: %s" % repr(httpErrorException))
+			errorString = str(httpErrorException)
 			if (httpErrorException.response.status_code == 401):
 				# TODO: Handle status code 401 - perhaps dial back request timing
 				errorString = "401 - Unauthorized"
@@ -420,7 +477,7 @@ class Plugin(indigo.PluginBase):
 			errorDict["loginErrorMessage"] = errorString
 			return (False, valuesDict, errorDict)
 		except AccessDeniedError as accessDeniedException:
-			self.debugLog("AccessDeniedError: %s" % accessDeniedException.error)
+			self.debugLog("AccessDeniedError: %s" % repr(accessDeniedException))
 			if (accessDeniedException.error == u'invalid user credentials'):
 				errorString = u"Invalid user credentials"
 				indigo.server.log(errorString, isError=True)
@@ -441,7 +498,7 @@ class Plugin(indigo.PluginBase):
 				errorDict["loginErrorMessage"] = errorString
 				return (False, valuesDict, errorDict)
 			else:
-				errorString = u"Unhandled AccessDeniedError: %s" % accessDeniedException.error
+				errorString = u"Unhandled AccessDeniedError: %s" % str(accessDeniedException)
 				indigo.server.log(errorString, isError=True)
 				valuesDict["showLoginErrorField"] = "true"
 				valuesDict["showAuthCodeField"] = "false"
@@ -451,7 +508,7 @@ class Plugin(indigo.PluginBase):
 				errorDict["loginErrorMessage"] = errorString
 				return (False, valuesDict, errorDict)
 		except InvalidGrantError as invalidGrantException:
-			self.debugLog("InvalidGrantError: %s" % invalidGrantException.error)
+			self.debugLog("InvalidGrantError: %s" % repr(invalidGrantException))
 			# Clean the cache file (discard existing auth token) because token invalid/missing
 			_clean_cache(CACHE_FILE)
 			errorString = u"Authorization token was invalid, and has been deleted; please try again"
@@ -462,14 +519,14 @@ class Plugin(indigo.PluginBase):
 			errorDict["loginErrorMessage"] = errorString
 			return (False, valuesDict, errorDict)
 		except MissingTokenError as missingTokenException:
-			self.debugLog("MissingTokenError: %s" % missingTokenException.error)
+			self.debugLog("MissingTokenError: %s" % repr(missingTokenException))
 			valuesDict["showLoginErrorField"] = "false"
 			valuesDict["showAuthCodeField"] = "true"
 			valuesDict["authorizationCode"] = ""
 			errorDict["authorizationCode"] = "Please enter the two-factor verification code sent to you by Ring"
 			return (False, valuesDict, errorDict)
 		except CustomOAuth2Error as oauthException:
-			self.debugLog("CustomOAuth2Error: %s" % oauthException.error)
+			self.debugLog("CustomOAuth2Error: %s" % repr(oauthException))
 			if (oauthException.error == u'error requesting 2fa service to send code'):
 				errorString = u"Error asking Ring.com 2FA service to send a verification code;" \
 							  u" limited to ten requests every ten minutes, and if you make too many login attempts" \
@@ -492,7 +549,7 @@ class Plugin(indigo.PluginBase):
 				errorDict["loginErrorMessage"] = errorString
 				return (False, valuesDict, errorDict)
 			else:
-				errorString = u"Unhandled CustomOAuth2Error: %s" % oauthException.error
+				errorString = u"Unhandled CustomOAuth2Error: %s" % str(oauthException)
 				indigo.server.log(errorString, isError=True)
 				valuesDict["showLoginErrorField"] = "true"
 				valuesDict["showAuthCodeField"] = "false"
@@ -500,8 +557,8 @@ class Plugin(indigo.PluginBase):
 				errorDict["loginErrorMessage"] = errorString
 				return (False, valuesDict, errorDict)
 		except Exception as unknownException:
-			self.debugLog("Unhandled exception: %s" % unknownException.error)
-			errorString = u"Unhandled exception: %s" % unknownException.error
+			self.debugLog("Unhandled exception: %s" % repr(unknownException))
+			errorString = u"Unhandled exception: %s" % str(unknownException)
 			indigo.server.log(errorString, isError=True)
 			valuesDict["showLoginErrorField"] = "true"
 			valuesDict["showAuthCodeField"] = "false"
@@ -577,6 +634,32 @@ class Plugin(indigo.PluginBase):
 			indigoDevice.subModel = subModel
 			indigoDevice.replaceOnServer()
 
+		# As of version 1.7.0 of plugin, added new states - update older existing devices to include these new states
+		# TODO: Better way to do this, such as keying off of diff between current version and stored version #?
+		#  Or perhaps just always trigger customStateRefreshNeeded... perhaps cost is not that high of doing so for
+		#  every device every time plugin loads (vs. all the checking below)
+		customStateRefreshNeeded = False
+		if ("timeSinceLastEventShortString" not in indigoDevice.states):
+			customStateRefreshNeeded = True
+		if ("lastMotionEventId" not in indigoDevice.states):
+			customStateRefreshNeeded = True
+		if ("timeSinceLastMotionShortString" not in indigoDevice.states):
+			customStateRefreshNeeded = True
+		if ("lastDoorellPressEventId" not in indigoDevice.states):
+			customStateRefreshNeeded = True
+		if ("timeSinceLastDoorbellPressShortString" not in indigoDevice.states):
+			customStateRefreshNeeded = True
+		if ("lastOnDemandTime" not in indigoDevice.states):
+			customStateRefreshNeeded = True
+		if ("lastOnDemandEventId" not in indigoDevice.states):
+			customStateRefreshNeeded = True
+		if ("timeSinceLastOnDemandShortString" not in indigoDevice.states):
+			customStateRefreshNeeded = True
+
+		if (customStateRefreshNeeded is True):
+			# Trigger Indigo server to fetch updated state list definition (e.g. from Devices.xml)
+			indigoDevice.stateListOrDisplayStateIdChanged()
+
 		# Initialize lastEventTime, lastDoorbellPressTime, lastMotionTime to date in distant past if needed
 		distantPast = datetime.datetime(
 			year=1900,
@@ -595,6 +678,8 @@ class Plugin(indigo.PluginBase):
 			keyValueList.append({'key': 'lastDoorbellPressTime', 'value': stringifiedDistantPast})
 		if ((indigoDevice.states["lastMotionTime"] is None) or (indigoDevice.states["lastMotionTime"] == "")):
 			keyValueList.append({'key': 'lastMotionTime', 'value': stringifiedDistantPast})
+		if ((indigoDevice.states["lastOnDemandTime"] is None) or (indigoDevice.states["lastOnDemandTime"] == "")):
+			keyValueList.append({'key': 'lastOnDemandTime', 'value': stringifiedDistantPast})
 
 		# Push accumulated state initialization to server, and initialize state image
 		indigoDevice.updateStatesOnServer(keyValueList)
@@ -609,11 +694,21 @@ class Plugin(indigo.PluginBase):
 		indigoDevice = indigo.devices[pluginAction.deviceId]
 
 		filename = pluginAction.props.get('downloadFilePath', "")
+
+		# Default to using lastEventId for device
 		eventId = ""
 		if ("lastEventId" in indigoDevice.states):
 			eventId = indigoDevice.states["lastEventId"]
+
+		# Switch on event id option specified by user (default to lastEventId)
 		eventIdOption = pluginAction.props.get('eventIdOption', "lastEventId")
-		if eventIdOption == "specifyEventId":
+		if eventIdOption == "lastMotionEventId":
+			eventId = indigoDevice.states["lastMotionEventId"]
+		elif eventIdOption == "lastDoorbellPressEventId":
+			eventId = indigoDevice.states["lastDoorbellPressEventId"]
+		elif eventIdOption == "lastOnDemandEventId":
+			eventId = indigoDevice.states["lastOnDemandEventId"]
+		elif eventIdOption == "specifyEventId":
 			eventId = pluginAction.props.get('userSpecifiedEventId', "")
 
 		# Make sure we have an event ID to process
@@ -623,6 +718,7 @@ class Plugin(indigo.PluginBase):
 
 		if filename:
 			ringDevice = self.getExistingRingDeviceMappingForIndigoDevice(indigoDevice.address)
+			indigo.server.log(u"Starting download of video of event for '%s' to %s" % (indigoDevice.name, filename))
 
 			if (ringDevice.recording_download(eventId, filename, override=True)):
 				# Download succeeded
@@ -639,7 +735,8 @@ class Plugin(indigo.PluginBase):
 					if (returnCode is not 0):
 						indigo.server.log(u"Error converting downloaded video to animated GIF", isError=True)
 					else:
-						indigo.server.log(u"Converted video of event for '%s' to animated GIF: %s" % (indigoDevice.name, gifFilename))
+						indigo.server.log(u"Converted video of event for '%s' to animated GIF: %s" %
+										  (indigoDevice.name, gifFilename))
 
 				# Check for triggers we need to execute
 				for triggerId, trigger in sorted(self.activeDownloadCompleteTriggers.iteritems()):
@@ -729,6 +826,8 @@ class Plugin(indigo.PluginBase):
 			self.activeButtonPushedTriggers[trigger.id] = trigger
 		elif trigger.pluginTypeId == "motionDetectedEvent":
 			self.activeMotionDetectedTriggers[trigger.id] = trigger
+		elif trigger.pluginTypeId == "onDemandAccessEvent":
+			self.activeOnDemandAccessTriggers[trigger.id] = trigger
 		elif trigger.pluginTypeId == "videoDownloadCompleteEvent":
 			self.activeDownloadCompleteTriggers[trigger.id] = trigger
 
@@ -739,6 +838,8 @@ class Plugin(indigo.PluginBase):
 			del self.activeButtonPushedTriggers[trigger.id]
 		elif trigger.pluginTypeId == "motionDetectedEvent":
 			del self.activeMotionDetectedTriggers[trigger.id]
+		elif trigger.pluginTypeId == "onDemandAccessEvent":
+			del self.activeOnDemandAccessTriggers[trigger.id]
 		elif trigger.pluginTypeId == "videoDownloadCompleteEvent":
 			del self.activeDownloadCompleteTriggers[trigger.id]
 
@@ -767,18 +868,53 @@ class Plugin(indigo.PluginBase):
 
 
 	########################################
+	def getTimeSinceShortString(self, eventDateTime):
+		now = datetime.datetime.now(tz=pytz.utc)
+		difference = now - eventDateTime
+
+		minutes = difference.days * 1440 + difference.seconds // 60
+		if minutes < 0:
+			minutes = 0
+		# indigo.server.log(str(minutes))
+
+		timeSinceShortString = '>99d'
+		# Logic adapted from DSC Alarm Plugin's getShortTime method
+		# If time is less than 60 min then show XXm
+		if minutes < 60:
+			timeSinceShortString = str(minutes) + 'm'
+		# If it's less than 24 hours then show XXh
+		elif minutes < 1440:
+			timeSinceShortString = str(int(minutes / 60)) + 'h'
+		# If it's less than 100 days then show XXd
+		elif minutes < 144000:
+			timeSinceShortString = str(int(minutes / 1440)) + 'd'
+		# If it's anything more than one hundred days then show '>99d' to keep the string short
+		else:
+			timeSinceShortString = '>99d'
+
+		return timeSinceShortString
+
+
+	########################################
 	def printRingDeviceToLog(self, ringDevice, logger):
-		# TODO: Add in exception and capability checking and uncomment all lines below
-		logger(u' ')
-		logger(u'Name:          %s' % ringDevice.name)
-		logger(u'Account ID:    %s' % ringDevice.account_id)
-		# logger(u'Location:      %s' % ringDevice.address)
-		logger(u'Model:         %s' % ringDevice.model)
-		logger(u'Family:        %s' % ringDevice.family)
-		logger(u'Firmware:      %s' % ringDevice.firmware)
-		# logger(u'Battery Level: %s' % ringDevice.battery_life)
-		logger(u'Volume:        %s' % ringDevice.volume)
-		logger(u'Timezone:      %s' % ringDevice.timezone)
-		# logger(u'MAC Address:   %s' % ringDevice.id)
-		# logger(u'Wifi Name:     %s' % ringDevice.wifi_name)
-		# logger(u'Wifi RSSI:     %s' % ringDevice.wifi_signal_strength)
+		try:
+			logger(u' ')
+			logger(u'Name:          %s' % ringDevice.name)
+			logger(u'Account ID:    %s' % ringDevice.account_id)
+			logger(u'Location:      %s' % ringDevice.address)
+			logger(u'Model:         %s' % ringDevice.model)
+			logger(u'Family:        %s' % ringDevice.family)
+			logger(u'Firmware:      %s' % ringDevice.firmware)
+			if ringDevice.has_capability('battery'):
+				logger(u'Battery Level: %s' % ringDevice.battery_life)
+			if ringDevice.has_capability('volume'):
+				logger(u'Volume:        %s' % ringDevice.volume)
+			logger(u'Timezone:      %s' % ringDevice.timezone)
+			logger(u'MAC Address:   %s' % ringDevice.id)
+			logger(u'Wifi Name:     %s' % ringDevice.wifi_name)
+			logger(u'Wifi RSSI:     %s' % ringDevice.wifi_signal_strength)
+		except Exception as printException:
+			self.debugLog("Exception caught while printing information about Ring device %s (error: %s)" %
+						  (ringDevice.name, repr(printException)))
+			indigo.server.log("Error printing information about Ring device %s (error: %s)" %
+							  (ringDevice.name, str(printException)), isError=True)
