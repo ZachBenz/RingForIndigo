@@ -10,6 +10,7 @@ import datetime
 import pytz
 import requests
 import subprocess
+from requests import ConnectionError, HTTPError
 from ring_doorbell import Ring
 from oauthlib.oauth2.rfc6749.errors import AccessDeniedError, InvalidGrantError, MissingTokenError, CustomOAuth2Error
 from ring_doorbell.utils import _clean_cache
@@ -70,25 +71,16 @@ class Plugin(indigo.PluginBase):
 		# Close any existing connection
 		self.closeConnectionToRing()
 
-		# Attempt to connect
-		try:
-			self.debugLog(u"Attempting to connect to Ring.com API and login as %s" % username)
-			self.ring = Ring(username, password, self.twoFactorAuthorizationCallback)
-		except requests.exceptions.HTTPError as exception:
-			self.debugLog(u"Caught HTTPError in startup: %s" % (exception))
-			if (exception.response.status_code == 401):
-				# TODO: Handle status code 401 - perhaps dial back request timing
-				self.debugLog(u"401 - Unauthorized")
-			elif (exception.response.status_code == 429):
-				# TODO: Handle status code 429 - perhaps dial back request timing
-				self.debugLog(u"429 - Too Many Requests")
+		# Attempt to connect (exception handling needs to occur in method that calls this method)
+		indigo.server.log(u"Attempting to connect to Ring.com API and login as %s" % username)
+		self.ring = Ring(username, password, self.twoFactorAuthorizationCallback)
 
 		if (self.isConnected() is True):
 			# Connection successful
-			self.debugLog(u"Connection to Ring.com API successful")
+			indigo.server.log(u"Connection to Ring.com API successful")
 		else:
 			# Connection failed
-			self.debugLog(u"Connection to Ring.com API failed")
+			indigo.server.log(u"Connection to Ring.com API failed")
 
 
 	########################################
@@ -123,8 +115,8 @@ class Plugin(indigo.PluginBase):
 						if (('username' in self.pluginPrefs) and ('password' in self.pluginPrefs)):
 							try:
 								self.makeConnectionToRing(self.pluginPrefs['username'], self.pluginPrefs['password'])
-							except (AccessDeniedError, MissingTokenError, InvalidGrantError, CustomOAuth2Error)\
-									as loginException:
+							except (ConnectionError, HTTPError, AccessDeniedError, MissingTokenError, InvalidGrantError,
+									CustomOAuth2Error) as loginException:
 								self.debugLog("Error logging in: %s" % loginException.error)
 								indigo.server.log(u"Login error - please go to the Ring plugin's 'Configure...'"
 												  u" menu to update credentials",
@@ -155,7 +147,7 @@ class Plugin(indigo.PluginBase):
 								self.loginLimiterEngaged = True
 						else:
 							self.debugLog(u"pluginPrefs do not yet have username and/or password field")
-							indigo.serverLog(u"Incomplete login credentials provided - please visit the Ring plugin's"
+							indigo.server.log(u"Incomplete login credentials provided - please visit the Ring plugin's"
 											 u" 'Configure...' menu")
 					else:
 						# Sleep for 30 seconds while we wait for the user to resolve the error
@@ -167,7 +159,7 @@ class Plugin(indigo.PluginBase):
 
 				# If we are connected, update events and device status (otherwise, wait until after sleep to try again)
 				if (self.isConnected() is True):
-					self.debugLog(u"Getting updates from Ring.com API")
+					self.debugLog(u"Getting events and device states from Ring.com API")
 
 					# Go through and clear motion sensed on all devices each update cycle
 					# TODO: Consider having a different update frequency for clearing motion sensed state
@@ -214,6 +206,7 @@ class Plugin(indigo.PluginBase):
 									keyValueList.append({'key': 'lastEventKind', 'value': alert["kind"]})
 
 									if (alert["kind"] == "ding"):
+										indigo.server.log("%s doorbell button pushed" % ringDevice.name)
 										keyValueList.append({'key': 'lastDoorbellPressTime', 'value': stringifiedTime})
 										
 										# Check for triggers we need to execute
@@ -223,6 +216,7 @@ class Plugin(indigo.PluginBase):
 													(triggerIndigoDeviceId == str(indigoDevice.id))):
 												indigo.trigger.execute(trigger)
 									elif (alert["kind"] == "motion"):
+										indigo.server.log("%s motion detected" % ringDevice.name)
 										keyValueList.append({'key': 'lastMotionTime', 'value': stringifiedTime})
 										keyValueList.append({'key': 'onOffState', 'value': True})
 										indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.MotionSensorTripped)
@@ -285,6 +279,8 @@ class Plugin(indigo.PluginBase):
 
 									# Process motion and ding kinds to update
 									if (event["kind"] == 'motion'):
+										indigo.server.log("%s motion detected" % ringDevice.name)
+
 										# If it was already handled as an alert, this code won't be reached
 										if (indigoDeviceLastMotionTime < ringDeviceEventTime):
 											indigoDeviceLastMotionTime = ringDeviceEventTime
@@ -301,6 +297,8 @@ class Plugin(indigo.PluginBase):
 														(triggerIndigoDeviceId == str(indigoDevice.id))):
 													indigo.trigger.execute(trigger)
 									elif (event["kind"] == 'ding'):
+										indigo.server.log("%s doorbell button pushed" % ringDevice.name)
+
 										# If it was already handled as an alert, this code won't be reached
 										if (indigoDeviceLastDoorbellPressTime < ringDeviceEventTime):
 											indigoDeviceLastDoorbellPressTime = ringDeviceEventTime
@@ -395,9 +393,35 @@ class Plugin(indigo.PluginBase):
 
 			self.closeConnectionToRing()
 			self.makeConnectionToRing(username, password)
-		except AccessDeniedError as accessException:
-			self.debugLog("AccessDeniedError: %s" % accessException.error)
-			if (accessException.error == u'invalid user credentials'):
+		except ConnectionError as connectionException:
+			self.debugLog("HTTPError: %s" % connectionException.error)
+			errorString = connectionException.error
+			indigo.server.log(errorString, isError=True)
+			valuesDict["showLoginErrorField"] = "true"
+			valuesDict["showAuthCodeField"] = "false"
+			valuesDict["authorizationCode"] = ""
+			errorDict["username"] = errorString
+			errorDict["loginErrorMessage"] = errorString
+			return (False, valuesDict, errorDict)
+		except HTTPError as httpErrorException:
+			self.debugLog("HTTPError: %s" % httpErrorException.error)
+			errorString = httpErrorException.error
+			if (httpErrorException.response.status_code == 401):
+				# TODO: Handle status code 401 - perhaps dial back request timing
+				errorString = "401 - Unauthorized"
+			elif (httpErrorException.response.status_code == 429):
+				# TODO: Handle status code 429 - perhaps dial back request timing
+				errorString = "429 - Too Many Requests"
+			indigo.server.log(errorString, isError=True)
+			valuesDict["showLoginErrorField"] = "true"
+			valuesDict["showAuthCodeField"] = "false"
+			valuesDict["authorizationCode"] = ""
+			errorDict["username"] = errorString
+			errorDict["loginErrorMessage"] = errorString
+			return (False, valuesDict, errorDict)
+		except AccessDeniedError as accessDeniedException:
+			self.debugLog("AccessDeniedError: %s" % accessDeniedException.error)
+			if (accessDeniedException.error == u'invalid user credentials'):
 				errorString = u"Invalid user credentials"
 				indigo.server.log(errorString, isError=True)
 				valuesDict["showLoginErrorField"] = "true"
@@ -406,7 +430,7 @@ class Plugin(indigo.PluginBase):
 				errorDict["username"] = errorString
 				errorDict["loginErrorMessage"] = errorString
 				return (False, valuesDict, errorDict)
-			elif (accessException.error == u'token is invalid or does not exists'):
+			elif (accessDeniedException.error == u'token is invalid or does not exists'):
 				# Clean the cache file (discard existing auth token) because token invalid/missing
 				_clean_cache(CACHE_FILE)
 				errorString = u"Cached authorization token was invalid, and has been deleted; please try again"
@@ -417,7 +441,7 @@ class Plugin(indigo.PluginBase):
 				errorDict["loginErrorMessage"] = errorString
 				return (False, valuesDict, errorDict)
 			else:
-				errorString = u"Unhandled AccessDeniedError: %s" % accessException.error
+				errorString = u"Unhandled AccessDeniedError: %s" % accessDeniedException.error
 				indigo.server.log(errorString, isError=True)
 				valuesDict["showLoginErrorField"] = "true"
 				valuesDict["showAuthCodeField"] = "false"
@@ -602,7 +626,7 @@ class Plugin(indigo.PluginBase):
 
 			if (ringDevice.recording_download(eventId, filename, override=True)):
 				# Download succeeded
-				self.debugLog(u"Downloaded video of event for '%s' to %s" % (indigoDevice.name, filename))
+				indigo.server.log(u"Downloaded video of event for '%s' to %s" % (indigoDevice.name, filename))
 
 				# Create animated GIF, if requested
 				if (pluginAction.props.get('convertToAnimatedGIF', False)):
