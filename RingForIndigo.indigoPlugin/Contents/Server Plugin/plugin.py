@@ -32,6 +32,8 @@ class Plugin(indigo.PluginBase):
 		self.activeDownloadCompleteTriggers = {}
 		self.twoFactorAuthorizationCode = ""
 		self.loginLimiterEngaged = False
+		self.maxUpdateRetries = 5    # TODO: Make this user configurable?
+		self.currentUpdateRetries = 0
 		# TODO: Initialize some tables mapping Indigo devices to Ring devices to make lookups more efficient?
 
 
@@ -115,7 +117,8 @@ class Plugin(indigo.PluginBase):
 				# Check to see if our connection to the Ring.com API is up
 				self.debugLog(u"Connected to Ring.com API?: %s" % (self.isConnected()))
 				if (self.isConnected() is False):
-					# Connection is not currently up, attempt to establish connection
+					# Connection is not currently up, attempt to establish connection; if we fail, have user go to
+					# the Configure menu to update credentials
 					if (self.loginLimiterEngaged == False):
 						if (('username' in self.pluginPrefs) and ('password' in self.pluginPrefs)):
 							try:
@@ -129,7 +132,7 @@ class Plugin(indigo.PluginBase):
 
 								# Avoid exhausting allowed requests for 2FA code (10 requests per 10 minutes) or
 								# any other freeze-outs due to login errors
-								# Limiter can only be disabled by successfully saving updating plugin preferences
+								# Limiter can only be disabled by successfully saving updated plugin preferences
 								self.loginLimiterEngaged = True
 							except Exception as unknownException:
 								self.debugLog("Unrecognized exception encountered while logging in: %s:" %
@@ -139,7 +142,7 @@ class Plugin(indigo.PluginBase):
 												  isError=True)
 								# Avoid exhausting allowed requests for 2FA code (10 requests per 10 minutes) or
 								# any other freeze-outs due to login errors
-								# Limiter can only be disabled by successfully saving updating plugin preferences
+								# Limiter can only be disabled by successfully saving updated plugin preferences
 								self.loginLimiterEngaged = True
 							except:
 								self.debugLog("Unrecognized error encountered while logging in")
@@ -148,7 +151,7 @@ class Plugin(indigo.PluginBase):
 												  isError=True)
 								# Avoid exhausting allowed requests for 2FA code (10 requests per 10 minutes) or
 								# any other freeze-outs due to login errors
-								# Limiter can only be disabled by successfully saving updating plugin preferences
+								# Limiter can only be disabled by successfully saving updated plugin preferences
 								self.loginLimiterEngaged = True
 						else:
 							self.debugLog(u"pluginPrefs do not yet have username and/or password field")
@@ -156,11 +159,11 @@ class Plugin(indigo.PluginBase):
 											 u" 'Configure...' menu")
 					else:
 						# Sleep for 30 seconds while we wait for the user to resolve the error
-						self.sleep(30)
 						self.debugLog("User has yet to resolve login error by visiting Configure menu")
 						indigo.server.log(
 							u"Login error - please go to the Ring plugin's 'Configure...' menu to update credentials",
 							isError=True)
+						self.sleep(30)      # TODO: Make this a user configurable time?
 
 				# If we are connected, update events and device status (otherwise, wait until after sleep to try again)
 				if (self.isConnected() is True):
@@ -318,7 +321,23 @@ class Plugin(indigo.PluginBase):
 
 				# TODO Change to use a user specified update frequency; but, don't let it be less than 5 seconds
 				#  or more than X (60?) seconds
+				self.currentUpdateRetries = 0
 				self.sleep(7) # in seconds
+		except (AccessDeniedError, MissingTokenError, InvalidGrantError, CustomOAuth2Error) as updateException:
+			self.debugLog("Error while trying to update devices from Ring.com API: %s" % updateException.error)
+			if (self.currentUpdateRetries >= self.maxUpdateRetries):
+				indigo.server.log(u"Maximum retries reached - please go to the Ring plugin's 'Configure...'"
+								  u" menu to update credentials",
+								  isError=True)
+				# Avoid exhausting login attempts to Ring.com
+				# Limiter can only be disabled by successfully saving updated plugin preferences
+				self.loginLimiterEngaged = True
+				self.currentUpdateRetries = 0
+			else:
+				# Take a break for 30 seconds before retrying
+				indigo.server.log(u"Login error - pausing for 30 seconds before retrying", isError=True)
+				self.currentUpdateRetries += 1
+				self.sleep(30)    # TODO: Make this a user configurable time?
 		except self.StopThread:
 			# Close connection to Ring API
 			self.closeConnectionToRing()
@@ -387,7 +406,7 @@ class Plugin(indigo.PluginBase):
 				errorDict["username"] = errorString
 				errorDict["loginErrorMessage"] = errorString
 				return (False, valuesDict, errorDict)
-			if (accessException.error == u'token is invalid or does not exists'):
+			elif (accessException.error == u'token is invalid or does not exists'):
 				# Clean the cache file (discard existing auth token) because token invalid/missing
 				_clean_cache(CACHE_FILE)
 				errorString = u"Cached authorization token was invalid, and has been deleted; please try again"
@@ -723,7 +742,7 @@ class Plugin(indigo.PluginBase):
 
 	########################################
 	def printRingDeviceToLog(self, ringDevice, logger):
-		# TODO: Add in exception checking and uncomment all lines below (also add in capability checking)
+		# TODO: Add in exception and capability checking and uncomment all lines below
 		logger(u' ')
 		logger(u'Name:          %s' % ringDevice.name)
 		logger(u'Account ID:    %s' % ringDevice.account_id)
