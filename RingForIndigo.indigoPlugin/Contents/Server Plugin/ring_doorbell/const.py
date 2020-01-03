@@ -22,6 +22,9 @@ class OAuth:
 # number of attempts to refresh token
 RETRY_TOKEN = 3
 
+# timeout for HTTP requests
+TIMEOUT = 5
+
 # default suffix for session cache file
 CACHE_ATTRS = {'account': None, 'alerts': None, 'token': None,
                'auth': None}
@@ -35,7 +38,6 @@ try:
     preferences_path = indigo.server.getInstallFolderPath() + "/Preferences/Plugins"
     CACHE_FILE = os.path.join(preferences_path,
                               'com.thebenzes.zachbenz.indigoplugin.ringforindigo.session.cache')
-    indigo.server.getInstallFolderPath()
 except (AttributeError, TypeError):
     CACHE_FILE = os.path.join('.', '.ring_doorbell-session.cache')
 
