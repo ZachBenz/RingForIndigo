@@ -324,9 +324,9 @@ class Plugin(indigo.PluginBase):
 			# Close connection to Ring API
 			self.closeConnectionToRing()
 			pass
-		except:
+		except Exception as updateException:
 			# Handle any exception generically as a connection failure to be re-attempted after a pause
-			self.debugLog("Error while trying to update devices from Ring.com API")
+			self.debugLog("Error while trying to update devices from Ring.com API: %s" % updateException.error)
 			if (self.currentUpdateRetries >= self.maxUpdateRetries):
 				indigo.server.log(u"Maximum retries reached - please go to the Ring plugin's 'Configure...'"
 								  u" menu to update credentials",
@@ -639,7 +639,7 @@ class Plugin(indigo.PluginBase):
 					if (returnCode is not 0):
 						indigo.server.log(u"Error converting downloaded video to animated GIF", isError=True)
 					else:
-						indigo.server.log(u"Converted video of event for '%s' to animated GIF: %s" % (indigoDevice.name, filename + "gif"))
+						indigo.server.log(u"Converted video of event for '%s' to animated GIF: %s" % (indigoDevice.name, gifFilename))
 
 				# Check for triggers we need to execute
 				for triggerId, trigger in sorted(self.activeDownloadCompleteTriggers.iteritems()):
