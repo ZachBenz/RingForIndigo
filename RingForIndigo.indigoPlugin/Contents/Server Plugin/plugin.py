@@ -320,8 +320,13 @@ class Plugin(indigo.PluginBase):
 				#  or more than X (60?) seconds
 				self.currentUpdateRetries = 0
 				self.sleep(7) # in seconds
-		except (AccessDeniedError, MissingTokenError, InvalidGrantError, CustomOAuth2Error) as updateException:
-			self.debugLog("Error while trying to update devices from Ring.com API: %s" % updateException.error)
+		except self.StopThread:
+			# Close connection to Ring API
+			self.closeConnectionToRing()
+			pass
+		except:
+			# Handle any exception generically as a connection failure to be re-attempted after a pause
+			self.debugLog("Error while trying to update devices from Ring.com API")
 			if (self.currentUpdateRetries >= self.maxUpdateRetries):
 				indigo.server.log(u"Maximum retries reached - please go to the Ring plugin's 'Configure...'"
 								  u" menu to update credentials",
@@ -332,13 +337,9 @@ class Plugin(indigo.PluginBase):
 				self.currentUpdateRetries = 0
 			else:
 				# Take a break for 30 seconds before retrying
-				indigo.server.log(u"Login error - pausing for 30 seconds before retrying", isError=True)
+				indigo.server.log(u"Connection error - pausing for 30 seconds before retrying", isError=True)
 				self.currentUpdateRetries += 1
 				self.sleep(30)    # TODO: Make this a user configurable time?
-		except self.StopThread:
-			# Close connection to Ring API
-			self.closeConnectionToRing()
-			pass
 
 
 	########################################
