@@ -1,7 +1,7 @@
 # RingForIndigo
 Ring plugin for the Indigo Home Automation Server from [Indigo Domotics](https://www.indigodomo.com)
 
-# Recommendaded Ring Account Configuration
+# Recommended Ring Account Configuration
 
 It is STRONGLY recommended that you create a secondary account on Ring for Indigo to use. Whether or not you ultimately plan to enable two-factor authentication on the secondary account, be sure to still give that account a complex password that you don't use anywhere else, for maximum security.
 
