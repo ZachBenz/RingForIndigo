@@ -638,6 +638,8 @@ class Plugin(indigo.PluginBase):
 					self.debugLog("Return code from attempting to convert video to animated GIF: %s" % returnCode)
 					if (returnCode is not 0):
 						indigo.server.log(u"Error converting downloaded video to animated GIF", isError=True)
+					else:
+						indigo.server.log(u"Converted video of event for '%s' to animated GIF: %s" % (indigoDevice.name, filename + "gif"))
 
 				# Check for triggers we need to execute
 				for triggerId, trigger in sorted(self.activeDownloadCompleteTriggers.iteritems()):
