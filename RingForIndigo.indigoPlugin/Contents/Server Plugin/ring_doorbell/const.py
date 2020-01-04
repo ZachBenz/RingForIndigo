@@ -24,6 +24,12 @@ RETRY_TOKEN = 3
 
 # timeout for HTTP requests
 TIMEOUT = 5
+
+# longer default timeout for recording downloads - typical video file sizes
+# are ~12 MB and empirical testing reveals a ~20 second download time over a
+# fast connection, suggesting speed is largely governed by capacity of Ring
+# backend; to be safe, we factor in a worst case overhead and set it to 2
+# minutes (this default can be overridden in method call)
 DEFAULT_VIDEO_DOWNLOAD_TIMEOUT = 120
 
 # default suffix for session cache file
@@ -31,12 +37,14 @@ CACHE_ATTRS = {'account': None, 'alerts': None, 'token': None,
                'auth': None}
 
 try:
-    # Override ring_doorbell library's CACHE_FILE location so that it isn't stored in .indigoPlugin package
-    # itself (which causes it to be deleted when the plugin is upgraded); instead, store in appropriate
+    # Override ring_doorbell library's CACHE_FILE location so that it isn't
+    # stored in .indigoPlugin package itself (which causes it to be deleted
+    # when the plugin is upgraded); instead, store in appropriate
     # preferences directory
     # CACHE_FILE = os.path.join(os.getenv("HOME"),
     #                           '.ring_doorbell-session.cache')
-    preferences_path = indigo.server.getInstallFolderPath() + "/Preferences/Plugins"
+    preferences_path = indigo.server.getInstallFolderPath()\
+                       + "/Preferences/Plugins"
     CACHE_FILE = os.path.join(preferences_path,
                               'com.thebenzes.zachbenz.indigoplugin.ringforindigo.session.cache')
 except (AttributeError, TypeError):
