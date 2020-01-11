@@ -7,13 +7,13 @@
 import indigo
 
 import datetime
+import json
+import os
 import pytz
 import subprocess
 from requests import ConnectionError, HTTPError
-from ring_doorbell import Ring
+from ring_doorbell import Ring, Auth
 from oauthlib.oauth2.rfc6749.errors import AccessDeniedError, InvalidGrantError, MissingTokenError, CustomOAuth2Error
-from ring_doorbell.utils import _clean_cache
-from ring_doorbell.const import CACHE_FILE
 
 # Note the "indigo" module is automatically imported and made available inside
 # our global name space by the host process.
@@ -35,6 +35,14 @@ class Plugin(indigo.PluginBase):
 		self.loginLimiterEngaged = False
 		self.maxUpdateRetries = 5    # TODO: Make this user configurable?  Also, a constant -> const.py?
 		self.currentUpdateRetries = 0
+		try:
+			preferences_path = indigo.server.getInstallFolderPath() \
+							   + "/Preferences/Plugins"
+			self.tokenFile = os.path.join(preferences_path,
+									  'com.thebenzes.zachbenz.indigoplugin.ringforindigo.token')
+		except (AttributeError, TypeError):
+			indigo.server.log(u"Failed to find path for Ring API token file", isError=True)
+			self.tokenFile = os.path.join('.', 'com.thebenzes.zachbenz.indigoplugin.ringforindigo.token')
 		# TODO: Initialize some tables mapping Indigo devices to Ring devices to make lookups more efficient?
 
 
@@ -54,9 +62,35 @@ class Plugin(indigo.PluginBase):
 		self.debugLog(u"Shutdown called")
 
 
+	########################################
 	def twoFactorAuthorizationCallback(self):
 		self.debugLog("Ring.com API is asking for a two factor authentication code")
 		return self.twoFactorAuthorizationCode
+
+
+	########################################
+	def saveToken(self, token):
+		file = open(self.tokenFile, 'w')
+		file.write(json.dumps(token))
+		file.close()
+
+
+	########################################
+	def loadSavedToken(self):
+		if os.path.isfile(self.tokenFile):
+			file = open(self.tokenFile, 'r')
+			token = json.loads(file.read())
+			file.close()
+			return token
+		else:
+			return None
+
+
+	########################################
+	def clearSavedToken(self):
+		if os.path.isfile(self.tokenFile):
+			os.remove(self.tokenFile)
+
 
 	########################################
 	def makeConnectionToRing(self, username, password):
@@ -73,7 +107,12 @@ class Plugin(indigo.PluginBase):
 
 		# Attempt to connect (exception handling needs to occur in method that calls this method)
 		indigo.server.log(u"Attempting to connect to Ring.com API and login as %s" % username)
-		self.ring = Ring(username, password, self.twoFactorAuthorizationCallback)
+		if os.path.isfile(self.tokenFile):
+			auth = Auth(self.loadSavedToken(), self.saveToken)
+		else:
+			auth = Auth(None, self.saveToken)
+			auth.fetch_token(username, password, self.twoFactorAuthorizationCallback)
+		self.ring = Ring(auth)
 
 		if (self.isConnected() is True):
 			# Connection successful
@@ -85,14 +124,13 @@ class Plugin(indigo.PluginBase):
 
 	########################################
 	def closeConnectionToRing(self):
-		if ((self.ring is not None) and (self.ring.is_connected is True)):
-			self.ring.session.close()
-			self.ring.is_connected = False
+		if self.isConnected():
+			self.ring.auth = None
 
 
 	########################################
 	def isConnected(self):
-		return ((self.ring is not None) and (self.ring.is_connected is True))
+		return ((self.ring is not None) and (self.ring.auth is not None))
 
 
 	########################################
@@ -446,7 +484,7 @@ class Plugin(indigo.PluginBase):
 				currentPassword = self.pluginPrefs['password']
 			if ((username != currentUsername) or (password != currentPassword)):
 				self.debugLog("Username and/or password setting changed; discarding any existing authorization token")
-				_clean_cache(CACHE_FILE)
+				self.clearSavedToken()
 
 			self.closeConnectionToRing()
 			self.makeConnectionToRing(username, password)
@@ -489,7 +527,7 @@ class Plugin(indigo.PluginBase):
 				return (False, valuesDict, errorDict)
 			elif (accessDeniedException.error == u'token is invalid or does not exists'):
 				# Clean the cache file (discard existing auth token) because token invalid/missing
-				_clean_cache(CACHE_FILE)
+				self.clearSavedToken()
 				errorString = u"Cached authorization token was invalid, and has been deleted; please try again"
 				indigo.server.log(errorString, isError=True)
 				valuesDict["showLoginErrorField"] = "true"
@@ -510,7 +548,7 @@ class Plugin(indigo.PluginBase):
 		except InvalidGrantError as invalidGrantException:
 			self.debugLog("InvalidGrantError: %s" % repr(invalidGrantException))
 			# Clean the cache file (discard existing auth token) because token invalid/missing
-			_clean_cache(CACHE_FILE)
+			self.clearSavedToken()
 			errorString = u"Authorization token was invalid, and has been deleted; please try again"
 			indigo.server.log(errorString, isError=True)
 			valuesDict["showLoginErrorField"] = "true"
