@@ -13,6 +13,7 @@ import pytz
 import subprocess
 from requests import ConnectionError, HTTPError
 from ring_doorbell import Ring, Auth
+from tzlocal import get_localzone
 from oauthlib.oauth2.rfc6749.errors import AccessDeniedError, InvalidGrantError, MissingTokenError, CustomOAuth2Error
 
 # Note the "indigo" module is automatically imported and made available inside
@@ -35,6 +36,7 @@ class Plugin(indigo.PluginBase):
 		self.loginLimiterEngaged = False
 		self.maxUpdateRetries = 5    # TODO: Make this user configurable?  Also, a constant -> const.py?
 		self.currentUpdateRetries = 0
+		self.localTimezone = get_localzone()
 		try:
 			preferences_path = indigo.server.getInstallFolderPath() \
 							   + "/Preferences/Plugins"
@@ -261,15 +263,27 @@ class Plugin(indigo.PluginBase):
 									# TODO: Possible to get actual alert time from API call response?
 									now = datetime.datetime.now(tz=pytz.utc)
 									stringifiedTime = datetime.datetime.strftime(now, self.dateFormatString)
-									keyValueList.append({'key': 'lastEventTime', 'value': stringifiedTime})
-									keyValueList.append({'key': 'lastEventId', 'value': alert["id"]})
-									keyValueList.append({'key': 'lastEventKind', 'value': alert["kind"]})
+									stringifiedTimeLocalized = datetime.datetime.strftime(
+										now.astimezone(self.localTimezone), self.dateFormatString)
+									keyValueList.append({'key': 'lastEventTime',
+														 'value': stringifiedTime})
+									keyValueList.append({'key': 'lastEventTimeLocalized',
+														 'value': stringifiedTimeLocalized})
+									keyValueList.append({'key': 'lastEventId',
+														 'value': alert["id"]})
+									keyValueList.append({'key': 'lastEventKind',
+														 'value': alert["kind"]})
 
 									if (alert["kind"] == "motion"):
 										indigo.server.log("%s motion detected" % ringDevice.name)
-										keyValueList.append({'key': 'lastMotionTime', 'value': stringifiedTime})
-										keyValueList.append({'key': 'lastMotionEventId', 'value': alert["id"]})
-										keyValueList.append({'key': 'onOffState', 'value': True})
+										keyValueList.append({'key': 'lastMotionTime',
+															 'value': stringifiedTime})
+										keyValueList.append({'key': 'lastMotionTimeLocalized',
+															 'value': stringifiedTimeLocalized})
+										keyValueList.append({'key': 'lastMotionEventId',
+															 'value': alert["id"]})
+										keyValueList.append({'key': 'onOffState',
+															 'value': True})
 										indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.MotionSensorTripped)
 
 										# Check for triggers we need to execute
@@ -280,8 +294,12 @@ class Plugin(indigo.PluginBase):
 												indigo.trigger.execute(trigger)
 									elif (alert["kind"] == "ding"):
 										indigo.server.log("%s doorbell button pushed" % ringDevice.name)
-										keyValueList.append({'key': 'lastDoorbellPressTime', 'value': stringifiedTime})
-										keyValueList.append({'key': 'lastDoorbellPressEventId', 'value': alert["id"]})
+										keyValueList.append({'key': 'lastDoorbellPressTime',
+															 'value': stringifiedTime})
+										keyValueList.append({'key': 'lastDoorbellPressTimeLocalized',
+															 'value': stringifiedTimeLocalized})
+										keyValueList.append({'key': 'lastDoorbellPressEventId',
+															 'value': alert["id"]})
 
 										# Check for triggers we need to execute
 										for triggerId, trigger in sorted(self.activeButtonPushedTriggers.iteritems()):
@@ -335,13 +353,20 @@ class Plugin(indigo.PluginBase):
 												  (indigoDevice.name, event["kind"]))
 									stringifiedTime = datetime.datetime.strftime(ringDeviceEventTime,
 																				 self.dateFormatString)
+									stringifiedTimeLocalized = datetime.datetime.strftime(
+										ringDeviceEventTime.astimezone(self.localTimezone), self.dateFormatString)
 									keyValueList = []
 									# Process event if it is newer
 									if (indigoDeviceLastEventTime < ringDeviceEventTime):
 										indigoDeviceLastEventTime = ringDeviceEventTime
-										keyValueList.append({'key': 'lastEventTime', 'value': stringifiedTime})
-										keyValueList.append({'key': 'lastEventId', 'value': event["id"]})
-										keyValueList.append({'key': 'lastEventKind', 'value': event["kind"]})
+										keyValueList.append({'key': 'lastEventTime',
+															 'value': stringifiedTime})
+										keyValueList.append({'key': 'lastEventTimeLocalized',
+															 'value': stringifiedTimeLocalized})
+										keyValueList.append({'key': 'lastEventId',
+															 'value': event["id"]})
+										keyValueList.append({'key': 'lastEventKind',
+															 'value': event["kind"]})
 
 									# Process additional state based on event type
 									if (event["kind"] == 'motion'):
@@ -350,9 +375,14 @@ class Plugin(indigo.PluginBase):
 										# If it was already handled as an alert, this code won't be reached
 										if (indigoDeviceLastMotionTime < ringDeviceEventTime):
 											indigoDeviceLastMotionTime = ringDeviceEventTime
-											keyValueList.append({'key': 'lastMotionTime', 'value': stringifiedTime})
-											keyValueList.append({'key': 'lastMotionEventId', 'value': event["id"]})
-											keyValueList.append({'key': 'onOffState', 'value': True})
+											keyValueList.append({'key': 'lastMotionTime',
+																 'value': stringifiedTime})
+											keyValueList.append({'key': 'lastMotionTimeLocalized',
+																 'value': stringifiedTimeLocalized})
+											keyValueList.append({'key': 'lastMotionEventId',
+																 'value': event["id"]})
+											keyValueList.append({'key': 'onOffState',
+																 'value': True})
 											indigoDevice.updateStateImageOnServer(
 												indigo.kStateImageSel.MotionSensorTripped)
 
@@ -370,9 +400,14 @@ class Plugin(indigo.PluginBase):
 										if (indigoDeviceLastDoorbellPressTime < ringDeviceEventTime):
 											indigoDeviceLastDoorbellPressTime = ringDeviceEventTime
 											keyValueList.append(
-												{'key': 'lastDoorbellPressTime', 'value': stringifiedTime})
+												{'key': 'lastDoorbellPressTime',
+												 'value': stringifiedTime})
 											keyValueList.append(
-												{'key': 'lastDoorbellPressEventId', 'value': event["id"]})
+												{'key': 'lastDoorbellPressTimeLocalized',
+												 'value': stringifiedTimeLocalized})
+											keyValueList.append(
+												{'key': 'lastDoorbellPressEventId',
+												 'value': event["id"]})
 
 											# Check for triggers we need to execute
 											for triggerId, trigger in sorted(
@@ -388,9 +423,14 @@ class Plugin(indigo.PluginBase):
 										if (indigoDeviceLastOnDemandTime < ringDeviceEventTime):
 											indigoDeviceLastOnDemandTime = ringDeviceEventTime
 											keyValueList.append(
-												{'key': 'lastOnDemandTime', 'value': stringifiedTime})
+												{'key': 'lastOnDemandTime',
+												 'value': stringifiedTime})
 											keyValueList.append(
-												{'key': 'lastOnDemandEventId', 'value': event["id"]})
+												{'key': 'lastOnDemandTimeLocalized',
+												 'value': stringifiedTimeLocalized})
+											keyValueList.append(
+												{'key': 'lastOnDemandEventId',
+												 'value': event["id"]})
 
 											# Check for triggers we need to execute
 											for triggerId, trigger in sorted(
@@ -666,31 +706,8 @@ class Plugin(indigo.PluginBase):
 			indigoDevice.subModel = subModel
 			indigoDevice.replaceOnServer()
 
-		# As of version 1.7.0 of plugin, added new states - update older existing devices to include these new states
-		# TODO: Better way to do this, such as keying off of diff between current version and stored version #?
-		#  Or perhaps just always trigger customStateRefreshNeeded... perhaps cost is not that high of doing so for
-		#  every device every time plugin loads (vs. all the checking below)
-		customStateRefreshNeeded = False
-		if ("timeSinceLastEventShortString" not in indigoDevice.states):
-			customStateRefreshNeeded = True
-		if ("lastMotionEventId" not in indigoDevice.states):
-			customStateRefreshNeeded = True
-		if ("timeSinceLastMotionShortString" not in indigoDevice.states):
-			customStateRefreshNeeded = True
-		if ("lastDoorellPressEventId" not in indigoDevice.states):
-			customStateRefreshNeeded = True
-		if ("timeSinceLastDoorbellPressShortString" not in indigoDevice.states):
-			customStateRefreshNeeded = True
-		if ("lastOnDemandTime" not in indigoDevice.states):
-			customStateRefreshNeeded = True
-		if ("lastOnDemandEventId" not in indigoDevice.states):
-			customStateRefreshNeeded = True
-		if ("timeSinceLastOnDemandShortString" not in indigoDevice.states):
-			customStateRefreshNeeded = True
-
-		if (customStateRefreshNeeded is True):
-			# Trigger Indigo server to fetch updated state list definition (e.g. from Devices.xml)
-			indigoDevice.stateListOrDisplayStateIdChanged()
+		# Force an update to the device to reflect any changes in Devices.xml
+		indigoDevice.stateListOrDisplayStateIdChanged()
 
 		# Initialize lastEventTime, lastDoorbellPressTime, lastMotionTime to date in distant past if needed
 		distantPast = datetime.datetime(
@@ -703,20 +720,64 @@ class Plugin(indigo.PluginBase):
 			tzinfo=pytz.UTC)
 		stringifiedDistantPast = datetime.datetime.strftime(distantPast, self.dateFormatString)
 
-		if ((indigoDevice.states["lastEventTime"] is None) or (indigoDevice.states["lastEventTime"] == "")):
-			keyValueList.append({'key': 'lastEventTime', 'value': stringifiedDistantPast})
+		if ((indigoDevice.states["lastEventTime"] is None) or
+				(indigoDevice.states["lastEventTime"] == "")):
+			keyValueList.append({'key': 'lastEventTime',
+								 'value': stringifiedDistantPast})
 		if ((indigoDevice.states["lastDoorbellPressTime"] is None) or
 				(indigoDevice.states["lastDoorbellPressTime"] == "")):
-			keyValueList.append({'key': 'lastDoorbellPressTime', 'value': stringifiedDistantPast})
-		if ((indigoDevice.states["lastMotionTime"] is None) or (indigoDevice.states["lastMotionTime"] == "")):
-			keyValueList.append({'key': 'lastMotionTime', 'value': stringifiedDistantPast})
-		if ((indigoDevice.states["lastOnDemandTime"] is None) or (indigoDevice.states["lastOnDemandTime"] == "")):
-			keyValueList.append({'key': 'lastOnDemandTime', 'value': stringifiedDistantPast})
+			keyValueList.append({'key': 'lastDoorbellPressTime',
+								 'value': stringifiedDistantPast})
+		if ((indigoDevice.states["lastMotionTime"] is None) or
+				(indigoDevice.states["lastMotionTime"] == "")):
+			keyValueList.append({'key': 'lastMotionTime',
+								 'value': stringifiedDistantPast})
+		if ((indigoDevice.states["lastOnDemandTime"] is None) or
+				(indigoDevice.states["lastOnDemandTime"] == "")):
+			keyValueList.append({'key': 'lastOnDemandTime',
+								 'value': stringifiedDistantPast})
 
 		# Push accumulated state initialization to server, and initialize state image
 		indigoDevice.updateStatesOnServer(keyValueList)
 		indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.MotionSensor)
 
+		keyValueList = []
+		# TODO: Create helper functions for converting datetimes to/from strings, improve code maintainability
+		if ((indigoDevice.states["lastEventTimeLocalized"] is None) or
+				(indigoDevice.states["lastEventTimeLocalized"] == "")):
+			time = datetime.datetime.strptime(
+				indigoDevice.states["lastEventTime"], self.dateFormatString).\
+				replace(tzinfo=pytz.UTC).astimezone(self.localTimezone)
+			stringifiedTime = datetime.datetime.strftime(time, self.dateFormatString)
+			keyValueList.append({'key': 'lastEventTimeLocalized',
+								 'value': stringifiedTime})
+		if ((indigoDevice.states["lastDoorbellPressTimeLocalized"] is None) or
+				(indigoDevice.states["lastDoorbellPressTimeLocalized"] == "")):
+			time = datetime.datetime.strptime(
+			indigoDevice.states["lastDoorbellPressTime"], self.dateFormatString).\
+				replace(tzinfo=pytz.UTC).astimezone(self.localTimezone)
+			stringifiedTime = datetime.datetime.strftime(time, self.dateFormatString)
+			keyValueList.append({'key': 'lastDoorbellPressTimeLocalized',
+								 'value': stringifiedTime})
+		if ((indigoDevice.states["lastMotionTimeLocalized"] is None) or
+				(indigoDevice.states["lastMotionTimeLocalized"] == "")):
+			time = datetime.datetime.strptime(
+				indigoDevice.states["lastMotionTime"], self.dateFormatString).\
+				replace(tzinfo=pytz.UTC).astimezone(self.localTimezone)
+			stringifiedTime = datetime.datetime.strftime(time, self.dateFormatString)
+			keyValueList.append({'key': 'lastMotionTimeLocalized',
+								 'value': stringifiedTime})
+		if ((indigoDevice.states["lastOnDemandTimeLocalized"] is None) or
+				(indigoDevice.states["lastOnDemandTimeLocalized"] == "")):
+			time = datetime.datetime.strptime(
+				indigoDevice.states["lastOnDemandTime"], self.dateFormatString).\
+				replace(tzinfo=pytz.UTC).astimezone(self.localTimezone)
+			stringifiedTime = datetime.datetime.strftime(time, self.dateFormatString)
+			keyValueList.append({'key': 'lastOnDemandTimeLocalized',
+								 'value': stringifiedTime})
+
+		# Push accumulated state initialization to server
+		indigoDevice.updateStatesOnServer(keyValueList)
 
 
 	########################################

@@ -169,6 +169,11 @@
 				<TriggerLabel>Ring.com Event Time</TriggerLabel>
 				<ControlPageLabel>Ring.com Event Time</ControlPageLabel>
 			</State>
+			<State id="lastEventTimeLocalized">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Ring.com Event Time Localized</TriggerLabel>
+				<ControlPageLabel>Ring.com Event Time Localized</ControlPageLabel>
+			</State>
 			<State id="timeSinceLastEventShortString">
 				<ValueType>String</ValueType>
 				<TriggerLabel>Short String Time Since Last Event</TriggerLabel>
@@ -184,6 +189,11 @@
 				<ValueType>String</ValueType>
 				<TriggerLabel>Last Motion Time</TriggerLabel>
 				<ControlPageLabel>Last Motion Time</ControlPageLabel>
+			</State>
+			<State id="lastMotionTimeLocalized">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Last Motion Time Localized</TriggerLabel>
+				<ControlPageLabel>Last Motion Time Localized</ControlPageLabel>
 			</State>
 			<State id="timeSinceLastMotionShortString">
 				<ValueType>String</ValueType>
@@ -201,6 +211,11 @@
 				<TriggerLabel>Last Doorbell Press Time</TriggerLabel>
 				<ControlPageLabel>Last Doorbell Press Time</ControlPageLabel>
 			</State>
+			<State id="lastDoorbellPressTimeLocalized">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Last Doorbell Press Time Localized</TriggerLabel>
+				<ControlPageLabel>Last Doorbell Press Time Localized</ControlPageLabel>
+			</State>
 			<State id="timeSinceLastDoorbellPressShortString">
 				<ValueType>String</ValueType>
 				<TriggerLabel>Short String Time Since Last Doorbell Press</TriggerLabel>
@@ -217,6 +232,11 @@
 				<TriggerLabel>Last On Demand Access Time</TriggerLabel>
 				<ControlPageLabel>Last On Demand Access Time</ControlPageLabel>
 			</State>
+			<State id="lastOnDemandTimeLocalized">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Last On Demand Access Time Localized</TriggerLabel>
+				<ControlPageLabel>Last On Demand Access Time Localized</ControlPageLabel>
+			</State>
 			<State id="timeSinceLastOnDemandShortString">
 				<ValueType>String</ValueType>
 				<TriggerLabel>Short String Time Since Last On Demand Access</TriggerLabel>
@@ -227,13 +247,13 @@
 		<UiDisplayStateId>ringDeviceWifiSignalStrength</UiDisplayStateId>
 	</Device>
 
-	<!-- Cam With Lights (special case of Ring Stickup Cam family of devices that has as a siren and an on/off light
-	- e.g. the Spotlight Cam and the Floodlight Cam)
+	<!-- Security Camera With Lights (special case of Ring Stickup Cam family of devices that has as a siren
+	 and an on/off light - e.g. the Spotlight Cam and the Floodlight Cam)
 	-->
 
-	<!-- Basic Cam - (Basic Stickup Cam - no light or siren)
+	<!-- Basic Security Camera - (Basic Stickup Cam - no light or siren)
 	-->
 
-	<!-- Chime - not available anymore through Ring.com API as of December 2019?
+	<!-- Chime - not available through secondary accounts
 	-->
 </Devices>
