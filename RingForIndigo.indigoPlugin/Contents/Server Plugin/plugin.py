@@ -63,12 +63,6 @@ class Plugin(indigo.PluginBase):
 
 
 	########################################
-	def twoFactorAuthorizationCallback(self):
-		self.debugLog("Ring.com API is asking for a two factor authentication code")
-		return self.twoFactorAuthorizationCode
-
-
-	########################################
 	def saveToken(self, token):
 		file = open(self.tokenFile, 'w')
 		file.write(json.dumps(token))
@@ -111,7 +105,7 @@ class Plugin(indigo.PluginBase):
 			auth = Auth(self.loadSavedToken(), self.saveToken)
 		else:
 			auth = Auth(None, self.saveToken)
-			auth.fetch_token(username, password, self.twoFactorAuthorizationCallback)
+			auth.fetch_token(username, password, self.twoFactorAuthorizationCode)
 		self.ring = Ring(auth)
 
 		if (self.isConnected() is True):
