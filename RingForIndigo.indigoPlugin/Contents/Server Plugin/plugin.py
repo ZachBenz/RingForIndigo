@@ -719,6 +719,8 @@ class Plugin(indigo.PluginBase):
 			second=0,
 			tzinfo=pytz.UTC)
 		stringifiedDistantPast = datetime.datetime.strftime(distantPast, self.dateFormatString)
+		localizedDistantPast = distantPast.astimezone(self.localTimezone)
+		stringifiedLocalizedDistantPast = datetime.datetime.strftime(localizedDistantPast, self.dateFormatString)
 
 		if ((indigoDevice.states["lastEventTime"] is None) or
 				(indigoDevice.states["lastEventTime"] == "")):
@@ -741,7 +743,6 @@ class Plugin(indigo.PluginBase):
 		indigoDevice.updateStatesOnServer(keyValueList)
 		indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.MotionSensor)
 
-		keyValueList = []
 		# TODO: Create helper functions for converting datetimes to/from strings, improve code maintainability
 		if ((indigoDevice.states["lastEventTimeLocalized"] is None) or
 				(indigoDevice.states["lastEventTimeLocalized"] == "")):
@@ -749,35 +750,48 @@ class Plugin(indigo.PluginBase):
 				indigoDevice.states["lastEventTime"], self.dateFormatString).\
 				replace(tzinfo=pytz.UTC).astimezone(self.localTimezone)
 			stringifiedTime = datetime.datetime.strftime(time, self.dateFormatString)
-			keyValueList.append({'key': 'lastEventTimeLocalized',
-								 'value': stringifiedTime})
+			try:
+				indigoDevice.updateStateOnServer(key='lastEventTimeLocalized',
+												 value=stringifiedTime)
+			except:
+				indigoDevice.updateStateOnServer(key='lastEventTimeLocalized',
+												 value=stringifiedLocalizedDistantPast)
 		if ((indigoDevice.states["lastDoorbellPressTimeLocalized"] is None) or
 				(indigoDevice.states["lastDoorbellPressTimeLocalized"] == "")):
 			time = datetime.datetime.strptime(
 			indigoDevice.states["lastDoorbellPressTime"], self.dateFormatString).\
 				replace(tzinfo=pytz.UTC).astimezone(self.localTimezone)
 			stringifiedTime = datetime.datetime.strftime(time, self.dateFormatString)
-			keyValueList.append({'key': 'lastDoorbellPressTimeLocalized',
-								 'value': stringifiedTime})
+			try:
+				indigoDevice.updateStateOnServer(key='lastDoorbellPressTimeLocalized',
+												 value=stringifiedTime)
+			except:
+				indigoDevice.updateStateOnServer(key='lastEventTimeLocalized',
+												 value=stringifiedLocalizedDistantPast)
 		if ((indigoDevice.states["lastMotionTimeLocalized"] is None) or
 				(indigoDevice.states["lastMotionTimeLocalized"] == "")):
 			time = datetime.datetime.strptime(
 				indigoDevice.states["lastMotionTime"], self.dateFormatString).\
 				replace(tzinfo=pytz.UTC).astimezone(self.localTimezone)
 			stringifiedTime = datetime.datetime.strftime(time, self.dateFormatString)
-			keyValueList.append({'key': 'lastMotionTimeLocalized',
-								 'value': stringifiedTime})
+			try:
+				indigoDevice.updateStateOnServer(key='lastMotionTimeLocalized',
+												 value=stringifiedTime)
+			except:
+				indigoDevice.updateStateOnServer(key='lastEventTimeLocalized',
+												 value=stringifiedLocalizedDistantPast)
 		if ((indigoDevice.states["lastOnDemandTimeLocalized"] is None) or
 				(indigoDevice.states["lastOnDemandTimeLocalized"] == "")):
 			time = datetime.datetime.strptime(
 				indigoDevice.states["lastOnDemandTime"], self.dateFormatString).\
 				replace(tzinfo=pytz.UTC).astimezone(self.localTimezone)
 			stringifiedTime = datetime.datetime.strftime(time, self.dateFormatString)
-			keyValueList.append({'key': 'lastOnDemandTimeLocalized',
-								 'value': stringifiedTime})
-
-		# Push accumulated state initialization to server
-		indigoDevice.updateStatesOnServer(keyValueList)
+			try:
+				indigoDevice.updateStateOnServer(key='lastOnDemandTimeLocalized',
+												 value=stringifiedTime)
+			except:
+				indigoDevice.updateStateOnServer(key='lastEventTimeLocalized',
+												 value=stringifiedLocalizedDistantPast)
 
 
 	########################################
