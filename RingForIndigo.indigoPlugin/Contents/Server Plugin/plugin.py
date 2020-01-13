@@ -711,7 +711,7 @@ class Plugin(indigo.PluginBase):
 
 		# Initialize lastEventTime, lastDoorbellPressTime, lastMotionTime to date in distant past if needed
 		distantPast = datetime.datetime(
-			year=1900,
+			year=1901,
 			month=01,
 			day=01,
 			hour=0,
