@@ -744,53 +744,65 @@ class Plugin(indigo.PluginBase):
 		indigoDevice.updateStateImageOnServer(indigo.kStateImageSel.MotionSensor)
 
 		# TODO: Create helper functions for converting datetimes to/from strings, improve code maintainability
+		# Handle an issue introduced when adding localized time states - when initializing
+		# from the UTC state, the old default UTC initialization was January 1, 1900...
+		# which, when localized for folks east of UTC, would become a date in 1899, which
+		# is invalid for python datetime
 		if ((indigoDevice.states["lastEventTimeLocalized"] is None) or
 				(indigoDevice.states["lastEventTimeLocalized"] == "")):
-			time = datetime.datetime.strptime(
-				indigoDevice.states["lastEventTime"], self.dateFormatString).\
-				replace(tzinfo=pytz.UTC).astimezone(self.localTimezone)
-			stringifiedTime = datetime.datetime.strftime(time, self.dateFormatString)
 			try:
+				time = datetime.datetime.strptime(
+					indigoDevice.states["lastEventTime"], self.dateFormatString).\
+					replace(tzinfo=pytz.UTC).astimezone(self.localTimezone)
+				stringifiedTime = datetime.datetime.strftime(time, self.dateFormatString)
 				indigoDevice.updateStateOnServer(key='lastEventTimeLocalized',
 												 value=stringifiedTime)
 			except:
+				indigoDevice.updateStateOnServer(key='lastEventTime',
+												 value=stringifiedDistantPast)
 				indigoDevice.updateStateOnServer(key='lastEventTimeLocalized',
 												 value=stringifiedLocalizedDistantPast)
 		if ((indigoDevice.states["lastDoorbellPressTimeLocalized"] is None) or
 				(indigoDevice.states["lastDoorbellPressTimeLocalized"] == "")):
-			time = datetime.datetime.strptime(
-			indigoDevice.states["lastDoorbellPressTime"], self.dateFormatString).\
-				replace(tzinfo=pytz.UTC).astimezone(self.localTimezone)
-			stringifiedTime = datetime.datetime.strftime(time, self.dateFormatString)
 			try:
+				time = datetime.datetime.strptime(
+				indigoDevice.states["lastDoorbellPressTime"], self.dateFormatString).\
+					replace(tzinfo=pytz.UTC).astimezone(self.localTimezone)
+				stringifiedTime = datetime.datetime.strftime(time, self.dateFormatString)
 				indigoDevice.updateStateOnServer(key='lastDoorbellPressTimeLocalized',
 												 value=stringifiedTime)
 			except:
-				indigoDevice.updateStateOnServer(key='lastEventTimeLocalized',
+				indigoDevice.updateStateOnServer(key='lastDoorbellPressTime',
+												 value=stringifiedDistantPast)
+				indigoDevice.updateStateOnServer(key='lastDoorbellPressTimeLocalized',
 												 value=stringifiedLocalizedDistantPast)
 		if ((indigoDevice.states["lastMotionTimeLocalized"] is None) or
 				(indigoDevice.states["lastMotionTimeLocalized"] == "")):
-			time = datetime.datetime.strptime(
-				indigoDevice.states["lastMotionTime"], self.dateFormatString).\
-				replace(tzinfo=pytz.UTC).astimezone(self.localTimezone)
-			stringifiedTime = datetime.datetime.strftime(time, self.dateFormatString)
 			try:
+				time = datetime.datetime.strptime(
+					indigoDevice.states["lastMotionTime"], self.dateFormatString).\
+					replace(tzinfo=pytz.UTC).astimezone(self.localTimezone)
+				stringifiedTime = datetime.datetime.strftime(time, self.dateFormatString)
 				indigoDevice.updateStateOnServer(key='lastMotionTimeLocalized',
 												 value=stringifiedTime)
 			except:
-				indigoDevice.updateStateOnServer(key='lastEventTimeLocalized',
+				indigoDevice.updateStateOnServer(key='lastMotionTime',
+												 value=stringifiedDistantPast)
+				indigoDevice.updateStateOnServer(key='lastMotionTimeLocalized',
 												 value=stringifiedLocalizedDistantPast)
 		if ((indigoDevice.states["lastOnDemandTimeLocalized"] is None) or
 				(indigoDevice.states["lastOnDemandTimeLocalized"] == "")):
-			time = datetime.datetime.strptime(
-				indigoDevice.states["lastOnDemandTime"], self.dateFormatString).\
-				replace(tzinfo=pytz.UTC).astimezone(self.localTimezone)
-			stringifiedTime = datetime.datetime.strftime(time, self.dateFormatString)
 			try:
+				time = datetime.datetime.strptime(
+					indigoDevice.states["lastOnDemandTime"], self.dateFormatString).\
+					replace(tzinfo=pytz.UTC).astimezone(self.localTimezone)
+				stringifiedTime = datetime.datetime.strftime(time, self.dateFormatString)
 				indigoDevice.updateStateOnServer(key='lastOnDemandTimeLocalized',
 												 value=stringifiedTime)
 			except:
-				indigoDevice.updateStateOnServer(key='lastEventTimeLocalized',
+				indigoDevice.updateStateOnServer(key='lastOnDemandTime',
+												 value=stringifiedDistantPast)
+				indigoDevice.updateStateOnServer(key='lastOnDemandTimeLocalized',
 												 value=stringifiedLocalizedDistantPast)
 
 
